@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Time to stretch!!</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="toast">
+    <div class="toast-card" id="card">
+      <div class="lifetime" aria-hidden="true"><span id="lifetime-bar"></span></div>
+      <header class="toast-head" title="Open Stretch Reminder">
+        <div>
+          <h1>Time to stretch!!</h1>
+          <p class="muted small" id="toast-sub"></p>
+        </div>
+        <div class="ring" id="ring" aria-hidden="true">
+          <span id="progress-count">0/0</span>
+        </div>
+      </header>
+
+      <ol class="toast-list" id="list"></ol>
+
+      <footer class="toast-foot">
+        <p class="nag" id="nag" role="status"></p>
+        <button type="button" class="primary wide" id="complete">Complete</button>
+        <p class="hint small muted" id="hint">Click here to open the app</p>
+      </footer>
+    </div>
+    <script type="module" src="/src/toast.ts"></script>
+  </body>
+</html>

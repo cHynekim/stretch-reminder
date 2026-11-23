@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stretch Reminder</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="settings">
+    <main class="wrap">
+      <header class="top">
+        <div>
+          <h1 id="title">Let's set up your stretch routine</h1>
+          <p id="subtitle" class="muted">Pick what you want to stretch and how often.</p>
+        </div>
+        <span id="status" class="pill" hidden></span>
+      </header>
+
+      <!-- Details: only after setup -->
+      <section class="card" id="details" hidden>
+        <h2>Details</h2>
+        <div class="stats">
+          <div class="stat"><span class="stat-num" id="stat-next">–</span><span class="muted small">until next stretch</span></div>
+          <div class="stat"><span class="stat-num" id="stat-done">0</span><span class="muted small">completed</span></div>
+          <div class="stat"><span class="stat-num" id="stat-missed">0</span><span class="muted small">missed</span></div>
+        </div>
+        <p class="muted small">Counts since the app was started. A missed reminder comes back after 5 minutes.</p>
+        <h2 class="mt">Your stretches</h2>
+        <ol id="guide" class="guide"></ol>
+      </section>
+
+      <h2 id="adjust-heading" class="section-title" hidden>Adjustments</h2>
+
+      <section class="card">
+        <h2>Body parts</h2>
+        <p class="muted small">Choose at least one.</p>
+        <div id="parts" class="parts-grid"></div>
+        <div class="row-actions">
+          <button type="button" id="select-all" class="link">Select all</button>
+          <button type="button" id="select-none" class="link">Clear</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Remind me every</h2>
+        <div class="stepper" data-stepper="interval">
+          <button type="button" class="step" data-dir="-1" aria-label="Decrease by 15 minutes">−</button>
+          <output id="interval-value">1 hour</output>
+          <button type="button" class="step" data-dir="1" aria-label="Increase by 15 minutes">+</button>
+        </div>
+        <p class="muted small center">15-minute steps, from 15 minutes to 4 hours.</p>
+      </section>
+
+      <section class="card" id="advanced" hidden>
+        <h2>Notification position</h2>
+        <div class="segmented" id="position" role="radiogroup">
+          <button type="button" role="radio" data-value="right-top">Top right</button>
+          <button type="button" role="radio" data-value="right-bottom">Bottom right</button>
+          <button type="button" role="radio" data-value="middle">Middle</button>
+        </div>
+
+        <h2 class="mt">Notification stays for</h2>
+        <div class="stepper" data-stepper="duration">
+          <button type="button" class="step" data-dir="-1" aria-label="Shorter">−</button>
+          <output id="duration-value">1:00</output>
+          <button type="button" class="step" data-dir="1" aria-label="Longer">+</button>
+        </div>
+        <p class="muted small center">20 seconds to 7 minutes. It stays open while you're stretching.</p>
+      </section>
+
+      <footer class="actions">
+        <button type="button" id="quit" class="danger" hidden>Quit app</button>
+        <div class="buttons">
+          <button type="button" id="test" class="secondary" hidden>Remind me now</button>
+          <button type="button" id="save" class="primary">Start reminding me</button>
+        </div>
+      </footer>
+      <p id="message" class="message" role="status"></p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
