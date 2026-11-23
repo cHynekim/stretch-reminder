@@ -4,79 +4,105 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stretch Reminder</title>
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body class="settings">
     <main class="wrap">
-      <header class="top">
-        <div>
-          <h1 id="title">Let's set up your stretch routine</h1>
-          <p id="subtitle" class="muted">Pick what you want to stretch and how often.</p>
+      <header class="hero">
+        <i class="sprite hero-sprite" data-sprite="blob" data-px="5"></i>
+        <div class="hero-text">
+          <h1 id="title"></h1>
+          <p id="subtitle" class="muted"></p>
         </div>
         <span id="status" class="pill" hidden></span>
       </header>
 
       <!-- Details: only after setup -->
       <section class="card" id="details" hidden>
-        <h2>Details</h2>
+        <h2 data-i18n="details"></h2>
         <div class="stats">
-          <div class="stat"><span class="stat-num" id="stat-next">–</span><span class="muted small">until next stretch</span></div>
-          <div class="stat"><span class="stat-num" id="stat-done">0</span><span class="muted small">completed</span></div>
-          <div class="stat"><span class="stat-num" id="stat-missed">0</span><span class="muted small">missed</span></div>
+          <div class="stat">
+            <i class="sprite" data-sprite="drop" data-px="3"></i>
+            <span class="stat-num" id="stat-next">–</span><span class="muted small" data-i18n="stat.next"></span>
+          </div>
+          <div class="stat">
+            <i class="sprite" data-sprite="heart" data-px="3"></i>
+            <span class="stat-num" id="stat-done">0</span><span class="muted small" data-i18n="stat.done"></span>
+          </div>
+          <div class="stat">
+            <i class="sprite" data-sprite="sprout" data-px="3"></i>
+            <span class="stat-num" id="stat-missed">0</span><span class="muted small" data-i18n="stat.missed"></span>
+          </div>
         </div>
-        <p class="muted small">Counts since the app was started. A missed reminder comes back after 5 minutes.</p>
-        <h2 class="mt">Your stretches</h2>
+        <p class="muted small" data-i18n="stat.note"></p>
+        <h2 class="mt" data-i18n="yourStretches"></h2>
         <ol id="guide" class="guide"></ol>
       </section>
 
-      <h2 id="adjust-heading" class="section-title" hidden>Adjustments</h2>
+      <h2 id="adjust-heading" class="section-title" data-i18n="adjustments" hidden></h2>
 
       <section class="card">
-        <h2>Body parts</h2>
-        <p class="muted small">Choose at least one.</p>
-        <div id="parts" class="parts-grid"></div>
-        <div class="row-actions">
-          <button type="button" id="select-all" class="link">Select all</button>
-          <button type="button" id="select-none" class="link">Clear</button>
+        <h2>Language · 언어</h2>
+        <div class="segmented two" id="language" role="radiogroup" aria-label="Language">
+          <button type="button" role="radio" data-value="en" lang="en">English</button>
+          <button type="button" role="radio" data-value="ko" lang="ko">한국어</button>
         </div>
       </section>
 
       <section class="card">
-        <h2>Remind me every</h2>
-        <div class="stepper" data-stepper="interval">
-          <button type="button" class="step" data-dir="-1" aria-label="Decrease by 15 minutes">−</button>
-          <output id="interval-value">1 hour</output>
-          <button type="button" class="step" data-dir="1" aria-label="Increase by 15 minutes">+</button>
+        <h2 data-i18n="bodyParts"></h2>
+        <p class="muted small" data-i18n="chooseOne"></p>
+        <div id="parts" class="parts-grid"></div>
+        <div class="row-actions">
+          <button type="button" id="select-all" class="link" data-i18n="selectAll"></button>
+          <button type="button" id="select-none" class="link" data-i18n="clear"></button>
         </div>
-        <p class="muted small center">15-minute steps, from 15 minutes to 4 hours.</p>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="remindEvery"></h2>
+        <div class="stepper" data-stepper="interval">
+          <button type="button" class="step" data-dir="-1" data-i18n-aria="interval.dec">−</button>
+          <output id="interval-value"></output>
+          <button type="button" class="step" data-dir="1" data-i18n-aria="interval.inc">+</button>
+        </div>
+        <p class="muted small center" data-i18n="interval.hint"></p>
       </section>
 
       <section class="card" id="advanced" hidden>
-        <h2>Notification position</h2>
+        <h2 data-i18n="position"></h2>
         <div class="segmented" id="position" role="radiogroup">
-          <button type="button" role="radio" data-value="right-top">Top right</button>
-          <button type="button" role="radio" data-value="right-bottom">Bottom right</button>
-          <button type="button" role="radio" data-value="middle">Middle</button>
+          <button type="button" role="radio" data-value="right-top" data-i18n="pos.right-top"></button>
+          <button type="button" role="radio" data-value="right-bottom" data-i18n="pos.right-bottom"></button>
+          <button type="button" role="radio" data-value="middle" data-i18n="pos.middle"></button>
         </div>
 
-        <h2 class="mt">Notification stays for</h2>
+        <h2 class="mt" data-i18n="staysFor"></h2>
         <div class="stepper" data-stepper="duration">
-          <button type="button" class="step" data-dir="-1" aria-label="Shorter">−</button>
-          <output id="duration-value">1:00</output>
-          <button type="button" class="step" data-dir="1" aria-label="Longer">+</button>
+          <button type="button" class="step" data-dir="-1" data-i18n-aria="duration.dec">−</button>
+          <output id="duration-value"></output>
+          <button type="button" class="step" data-dir="1" data-i18n-aria="duration.inc">+</button>
         </div>
-        <p class="muted small center">20 seconds to 7 minutes. It stays open while you're stretching.</p>
+        <p class="muted small center" data-i18n="duration.hint"></p>
       </section>
 
       <footer class="actions">
-        <button type="button" id="quit" class="danger" hidden>Quit app</button>
+        <button type="button" id="quit" class="btn danger" data-i18n="quit" hidden></button>
         <div class="buttons">
-          <button type="button" id="test" class="secondary" hidden>Remind me now</button>
-          <button type="button" id="save" class="primary">Start reminding me</button>
+          <button type="button" id="test" class="btn secondary" data-i18n="test" hidden></button>
+          <button type="button" id="save" class="btn"></button>
         </div>
       </footer>
       <p id="message" class="message" role="status"></p>
     </main>
+
+    <!-- In-app confirmation toast for quitting -->
+    <div id="quit-toast" class="app-toast" role="alertdialog" aria-labelledby="quit-toast-text" hidden>
+      <p id="quit-toast-text" data-i18n="quit.confirm"></p>
+      <div class="app-toast-actions">
+        <button type="button" id="quit-cancel" class="btn secondary" data-i18n="quit.cancel"></button>
+        <button type="button" id="quit-confirm" class="btn danger" data-i18n="quit.yes"></button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

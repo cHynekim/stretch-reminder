@@ -1,20 +1,22 @@
+import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
-import { BODY_PARTS, BodyPart, HOLD_SECONDS, Settings, formatClock, formatInterval } from "./shared";
+import { hydrateSprites } from "./pixels";
+import { applyStatic, formatInterval, partName, partTip, randomTitle, setLanguage, t } from "./i18n";
+import { BODY_PART_IDS, HOLD_SECONDS, Settings, formatClock } from "./shared";
 
 /**
- * The notification closes on its own after `durationSeconds`, unless the user
- * has started stretching. Then it stays until they finish.
+ * A small square notification that closes on its own after `durationSeconds`,
+ * unless the user has started stretching. Then it stays until they finish.
  *
- * Each body part goes: idle → holding (timed) → ready (checkbox unlocks) → done.
- * "Complete" only works once every part is done. Clicking anywhere that isn't
- * a button opens the main app window.
+ * Each row is just [checkbox] [body part]. Clicking the body part opens its
+ * guide (accordion). The checkbox unlocks after the guide has been open for
+ * HOLD_SECONDS; ticking it collapses the row back. Clicking anywhere on the
+ * card that isn't a button opens the main app window.
  */
-type PartState = "idle" | "holding" | "ready" | "done";
-
 interface Item {
-  part: BodyPart;
-  state: PartState;
-  holdEndsAt: number;
+  id: string;
+  heldMs: number; // time spent with the guide open
+  done: boolean;
   el: HTMLLIElement;
 }
 
@@ -22,54 +24,89 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 const HOLD_MS = HOLD_SECONDS * 1000;
 const IDLE_NUDGE_MS = 60_000; // shake if a started session sits idle for a minute
-const FAIL_COOLDOWN_MS = 3_000; // lock "Complete" after a premature click
+const FAIL_COOLDOWN_MS = 2_500; // lock "Complete" after a premature click
+const NAG_MS = 3_000;
 
 let items: Item[] = [];
+let openItem: Item | null = null;
 let intervalMinutes = 60;
 let lifetimeMs = 60_000;
 let shownAt = Date.now();
-let engaged = false; // user pressed Start at least once, so auto-dismiss is off
+let lastTick = Date.now();
+let engaged = false; // opened a guide at least once, so auto-dismiss is off
 let lastActivity = Date.now();
 let cooldownUntil = 0;
+let nag: { text: string; tone: "warn" | "ok"; until: number } | null = null;
 let finished = false;
+
+const ready = (i: Item) => !i.done && i.heldMs >= HOLD_MS;
+const secsLeft = (i: Item) => Math.ceil((HOLD_MS - i.heldMs) / 1000);
 
 function activity() {
   lastActivity = Date.now();
 }
 
-function buildItem(part: BodyPart): Item {
+function say(text: string, tone: "warn" | "ok" = "warn", ms = NAG_MS) {
+  nag = { text, tone, until: Date.now() + ms };
+}
+
+function wiggle(el: HTMLElement) {
+  el.classList.remove("wiggle");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("wiggle");
+}
+
+function setOpen(item: Item | null) {
+  openItem = item;
+  if (item && !item.done) engaged = true;
+  for (const i of items) i.el.classList.toggle("open", i === item);
+  item?.el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function buildItem(id: string): Item {
   const li = document.createElement("li");
   li.className = "toast-item";
   li.innerHTML = `
-    <button type="button" class="check" disabled aria-label="Mark ${part.name} as stretched">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-    </button>
-    <div class="info">
-      <div class="name"></div>
-      <div class="tip"></div>
-      <div class="bar"><span></span></div>
+    <div class="row">
+      <button type="button" class="check">
+        <svg viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges">
+          <path d="M2 6h2v2H2zM4 8h2v2H4zM6 6h2v2H6zM8 4h2v2H8zM10 2h1v2h-1z" />
+        </svg>
+      </button>
+      <button type="button" class="part-name" aria-expanded="false"><span></span><b class="chev" aria-hidden="true">▸</b></button>
     </div>
-    <button type="button" class="go"></button>`;
-  li.querySelector(".name")!.textContent = part.name;
-  li.querySelector(".tip")!.textContent = part.tip;
+    <div class="panel"><div class="panel-inner">
+      <p class="tip"></p>
+      <div class="hold"><div class="hold-bar"><span></span></div><span class="hold-label"></span></div>
+    </div></div>`;
+  li.querySelector(".check")!.setAttribute("aria-label", t("toast.mark", { name: partName(id) }));
+  li.querySelector(".part-name span")!.textContent = partName(id);
+  li.querySelector(".tip")!.textContent = partTip(id);
 
-  const item: Item = { part, state: "idle", holdEndsAt: 0, el: li };
+  const item: Item = { id, heldMs: 0, done: false, el: li };
 
-  li.querySelector<HTMLButtonElement>(".go")!.addEventListener("click", () => {
+  li.querySelector<HTMLButtonElement>(".part-name")!.addEventListener("click", () => {
     activity();
-    if (item.state !== "idle" || items.some((i) => i.state === "holding")) return;
-    engaged = true;
-    item.state = "holding";
-    item.holdEndsAt = Date.now() + HOLD_MS;
+    setOpen(openItem === item ? null : item);
     render();
   });
 
   li.querySelector<HTMLButtonElement>(".check")!.addEventListener("click", () => {
     activity();
-    if (item.state === "ready") {
-      item.state = "done";
-      render();
+    if (item.done) return;
+    if (ready(item)) {
+      item.done = true;
+      setOpen(null); // collapse back to the plain row
+    } else {
+      wiggle(li);
+      if (openItem !== item) {
+        setOpen(item);
+        say(t("toast.holdFirst", { s: HOLD_SECONDS }));
+      } else {
+        say(t("toast.holdMore", { s: secsLeft(item) }));
+      }
     }
+    render();
   });
 
   return item;
@@ -77,68 +114,61 @@ function buildItem(part: BodyPart): Item {
 
 function render() {
   const now = Date.now();
-  const someoneHolding = items.some((i) => i.state === "holding");
 
   for (const item of items) {
-    const { el, state } = item;
-    el.dataset.state = state;
-    const go = el.querySelector<HTMLButtonElement>(".go")!;
-    const check = el.querySelector<HTMLButtonElement>(".check")!;
-    const bar = el.querySelector<HTMLSpanElement>(".bar span")!;
-
-    check.disabled = state !== "ready";
-
-    if (state === "idle") {
-      go.hidden = false;
-      go.disabled = someoneHolding;
-      go.textContent = `Start ${HOLD_SECONDS}s`;
-      bar.style.width = "0%";
-    } else if (state === "holding") {
-      const left = Math.max(0, item.holdEndsAt - now);
-      go.hidden = false;
-      go.disabled = true;
-      go.textContent = `${Math.ceil(left / 1000)}s`;
-      bar.style.width = `${(1 - left / HOLD_MS) * 100}%`;
-    } else {
-      go.hidden = true;
-      bar.style.width = "100%";
-    }
+    const { el } = item;
+    el.dataset.state = item.done ? "done" : ready(item) ? "ready" : "idle";
+    el.querySelector(".part-name")!.setAttribute("aria-expanded", String(item === openItem));
+    el.querySelector<HTMLSpanElement>(".hold-bar span")!.style.width =
+      `${Math.min(1, item.heldMs / HOLD_MS) * 100}%`;
+    el.querySelector(".hold-label")!.textContent = item.done
+      ? t("toast.partDone")
+      : ready(item)
+        ? t("toast.tick")
+        : t("toast.secs", { s: secsLeft(item) });
   }
 
-  const done = items.filter((i) => i.state === "done").length;
-  $("progress-count").textContent = `${done}/${items.length}`;
-  $("ring").style.setProperty("--p", String(items.length ? done / items.length : 0));
+  const done = items.filter((i) => i.done).length;
+  const total = items.length;
+  const left = Math.max(0, shownAt + lifetimeMs - now);
+
+  const sub = $("toast-sub");
+  if (nag && now < nag.until) {
+    sub.textContent = nag.text;
+    sub.className = `toast-sub ${nag.tone}`;
+  } else {
+    sub.textContent = engaged
+      ? t("toast.engaged", { done, total })
+      : t("toast.closes", { done, total, t: formatClock(left / 1000) });
+    sub.className = "toast-sub";
+  }
 
   const complete = $<HTMLButtonElement>("complete");
   const cooling = now < cooldownUntil;
-  complete.classList.toggle("locked", done < items.length || cooling);
+  complete.classList.toggle("locked", done < total || cooling);
   complete.textContent = cooling
-    ? `Wait ${Math.ceil((cooldownUntil - now) / 1000)}s…`
-    : done < items.length
-      ? `Complete (${done}/${items.length})`
-      : "Complete ✓";
+    ? t("toast.wait", { s: Math.ceil((cooldownUntil - now) / 1000) })
+    : done < total
+      ? `${t("toast.complete")} ${done}/${total}`
+      : `${t("toast.complete")} ★`;
 
-  // Auto-dismiss countdown (frozen once the user starts stretching).
-  const left = Math.max(0, shownAt + lifetimeMs - now);
-  $("lifetime-bar").style.width = engaged ? "100%" : `${(left / lifetimeMs) * 100}%`;
-  $("lifetime-bar").classList.toggle("engaged", engaged);
-  $("hint").textContent = engaged
-    ? "Click here to open the app · stays open until you finish"
-    : `Click here to open the app · closes in ${formatClock(left / 1000)}`;
+  const bar = $("lifetime-bar");
+  bar.style.width = engaged ? "100%" : `${(left / lifetimeMs) * 100}%`;
+  bar.classList.toggle("engaged", engaged);
 }
 
 function tick() {
   if (finished) return;
   const now = Date.now();
-  let changed = false;
-  for (const item of items) {
-    if (item.state === "holding" && now >= item.holdEndsAt) {
-      item.state = "ready";
-      changed = true;
-    }
+  const dt = now - lastTick;
+  lastTick = now;
+
+  // The hold only counts while that part's guide is open.
+  if (openItem && !openItem.done && openItem.heldMs < HOLD_MS) {
+    openItem.heldMs = Math.min(HOLD_MS, openItem.heldMs + dt);
+    if (openItem.heldMs >= HOLD_MS) activity();
   }
   render();
-  if (changed) activity();
 
   if (!engaged && now >= shownAt + lifetimeMs) {
     finished = true;
@@ -148,66 +178,53 @@ function tick() {
 
   if (engaged && now - lastActivity > IDLE_NUDGE_MS) {
     activity();
-    setNag("You started, so finish! Keep stretching.", "warn");
+    say(t("toast.keepGoing"));
     invoke("nudge_toast").catch(() => {});
   }
-}
-
-function setNag(text: string, tone: "warn" | "ok" | "" = "") {
-  const nag = $("nag");
-  nag.textContent = text;
-  nag.className = `nag ${tone}`;
-}
-
-function rejectComplete(message: string) {
-  cooldownUntil = Date.now() + FAIL_COOLDOWN_MS;
-  setNag(message, "warn");
-  invoke("nudge_toast").catch(() => {});
-  render();
 }
 
 function onComplete() {
   activity();
   if (finished || Date.now() < cooldownUntil) return;
 
-  const notStarted = items.filter((i) => i.state === "idle");
-  const holding = items.find((i) => i.state === "holding");
-  const unchecked = items.filter((i) => i.state === "ready");
-
-  if (notStarted.length || holding || unchecked.length) {
-    let msg: string;
-    if (holding) msg = `Not so fast! Keep holding your ${holding.part.name.toLowerCase()} stretch.`;
-    else if (notStarted.length)
-      msg = `Not so fast! Still to stretch: ${notStarted.map((i) => i.part.name).join(", ")}.`;
-    else msg = `Tick off ${unchecked.map((i) => i.part.name).join(", ")} first.`;
-    rejectComplete(msg);
+  const left = items.filter((i) => !i.done);
+  if (left.length) {
+    cooldownUntil = Date.now() + FAIL_COOLDOWN_MS;
+    const list = left.map((i) => partName(i.id)).join(", ");
+    say(t("toast.notSoFast", { n: left.length, list }), "warn", 4000);
+    invoke("nudge_toast").catch(() => {});
+    render();
     return;
   }
 
   finished = true;
-  setNag(`Nice work! See you in ${formatInterval(intervalMinutes)}.`, "ok");
+  say(t("toast.nice", { t: formatInterval(intervalMinutes) }), "ok", 5000);
+  render();
   $<HTMLButtonElement>("complete").disabled = true;
   setTimeout(() => invoke("complete_stretch").catch(() => {}), 1200);
 }
 
 async function init() {
   const settings = await invoke<Settings | null>("get_settings");
+  setLanguage(settings?.language ?? "en");
+  applyStatic();
+  hydrateSprites();
+  $("toast-title").textContent = randomTitle();
+
   const selected = new Set(settings?.bodyParts ?? []);
-  const parts = BODY_PARTS.filter((p) => selected.has(p.id));
-  const list = parts.length ? parts : BODY_PARTS.slice(0, 2);
+  const ids = BODY_PART_IDS.filter((id) => selected.has(id));
 
   intervalMinutes = settings?.intervalMinutes ?? 60;
   lifetimeMs = (settings?.durationSeconds ?? 60) * 1000;
-  items = list.map(buildItem);
+  items = (ids.length ? ids : BODY_PART_IDS.slice(0, 2)).map(buildItem);
   $("list").replaceChildren(...items.map((i) => i.el));
-  $("toast-sub").textContent =
-    `${items.length} part${items.length === 1 ? "" : "s"} · ${HOLD_SECONDS}s each. Hit Start, stretch, then tick it off.`;
 
   $("complete").addEventListener("click", onComplete);
 
-  // Clicking the notification itself (anything that isn't a button) opens the app.
+  // Clicking the notification itself (anything on the card that isn't a button) opens the app.
   document.addEventListener("click", (e) => {
-    if ((e.target as Element).closest("button")) return;
+    const target = e.target as Element;
+    if (target.closest("button") || !target.closest(".toast-card")) return;
     invoke("open_main").catch(() => {});
   });
   document.addEventListener("pointerdown", activity);
@@ -218,9 +235,9 @@ async function init() {
   });
 
   render();
-  setInterval(tick, 200);
+  setInterval(tick, 100);
   requestAnimationFrame(() => {
-    shownAt = Date.now(); // countdown starts when it actually appears
+    shownAt = lastTick = Date.now(); // countdown starts when it actually appears
     invoke("toast_ready").catch(() => {});
   });
 }

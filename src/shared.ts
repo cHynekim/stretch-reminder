@@ -1,30 +1,34 @@
 export type ToastPosition = "right-top" | "right-bottom" | "middle";
+export type Language = "en" | "ko";
 
 /** Mirrors `Settings` in src-tauri/src/lib.rs (serde camelCase). */
 export interface Settings {
+  language: Language;
   bodyParts: string[];
   intervalMinutes: number;
   position: ToastPosition;
   durationSeconds: number;
 }
 
-export interface BodyPart {
-  id: string;
-  name: string;
-  tip: string;
+/** Mirrors `Stats` in src-tauri/src/lib.rs. */
+export interface Stats {
+  completed: number;
+  missed: number;
 }
 
-export const BODY_PARTS: BodyPart[] = [
-  { id: "neck", name: "Neck", tip: "Tilt your ear toward your shoulder. Hold, then switch sides." },
-  { id: "shoulders", name: "Shoulders", tip: "Roll your shoulders back 10 times, then pull each arm across your chest." },
-  { id: "upper-back", name: "Upper back", tip: "Clasp your hands in front of you, round your back and push them away." },
-  { id: "lower-back", name: "Lower back", tip: "Seated twist: hold the back of the chair and rotate gently. Do both sides." },
-  { id: "chest", name: "Chest", tip: "Clasp your hands behind you, open your chest and lift your arms slightly." },
-  { id: "wrists", name: "Wrists & forearms", tip: "Arm out, palm up. Gently pull your fingers back, then swap arms." },
-  { id: "hips", name: "Hips", tip: "Stand and step into a lunge, then press your hips forward. Switch legs." },
-  { id: "hamstrings", name: "Hamstrings", tip: "Put a heel on a low surface and hinge forward with a flat back." },
-  { id: "calves", name: "Calves", tip: "Hands on a wall, one leg back. Press that heel into the floor." },
-];
+/** Body part ids, in display order. Names and tips live in i18n.ts. */
+export const BODY_PART_IDS = [
+  "neck",
+  "shoulders",
+  "upper-back",
+  "lower-back",
+  "chest",
+  "wrists",
+  "hips",
+  "hamstrings",
+  "calves",
+] as const;
+export type BodyPartId = (typeof BODY_PART_IDS)[number];
 
 export const INTERVAL = { min: 15, max: 240, step: 15 };
 
@@ -41,29 +45,21 @@ export function stepDuration(current: number, dir: 1 | -1): number {
   return DURATION_STEPS[next];
 }
 
-/** Hold time for each body part once the user starts stretching. */
-export const HOLD_SECONDS = 20;
+/** How long each body part's guide must stay open before its checkbox unlocks. */
+export const HOLD_SECONDS = 7;
 
-/** Mirrors `Stats` in src-tauri/src/lib.rs. */
-export interface Stats {
-  completed: number;
-  missed: number;
+/** Language to suggest on first launch, from the OS/browser locale. */
+export function systemLanguage(): Language {
+  return navigator.languages?.some((l) => l.toLowerCase().startsWith("ko")) ? "ko" : "en";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  language: "en",
   bodyParts: [],
   intervalMinutes: 60,
   position: "right-bottom",
   durationSeconds: 60,
 };
-
-export function formatInterval(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return h === 1 ? "1 hour" : `${h} hours`;
-  return `${h}h ${m}m`;
-}
 
 export function formatClock(totalSeconds: number): string {
   const s = Math.max(0, Math.round(totalSeconds));

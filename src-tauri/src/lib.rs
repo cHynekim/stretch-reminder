@@ -15,17 +15,17 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Manager, PhysicalPosition, State, UserAttentionType, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder, WindowEvent,
+    WebviewWindowBuilder, WindowEvent, Wry,
 };
 
 const MAIN: &str = "main";
 const TOAST: &str = "toast";
 
-/// Logical size/spacing of the toast window.
-const TOAST_WIDTH: f64 = 400.0;
-const TOAST_BASE_HEIGHT: f64 = 190.0;
-const TOAST_ROW_HEIGHT: f64 = 84.0;
-const SCREEN_MARGIN: f64 = 16.0;
+/// Logical size of the (transparent) toast window. The rounded card inside is a bit
+/// smaller, leaving room for its drop shadow. The body-part list scrolls inside it.
+const TOAST_WIDTH: f64 = 300.0;
+const TOAST_HEIGHT: f64 = 330.0;
+const SCREEN_MARGIN: f64 = 8.0;
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -40,10 +40,19 @@ enum ToastPosition {
     Middle,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Language {
+    #[default]
+    En,
+    Ko,
+}
+
 /// Mirrors `Settings` in src/shared.ts.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct Settings {
+    language: Language,
     body_parts: Vec<String>,
     interval_minutes: u32,
     position: ToastPosition,
@@ -53,6 +62,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: Language::En,
             body_parts: Vec::new(),
             interval_minutes: 60,
             position: ToastPosition::RightBottom,
@@ -149,6 +159,7 @@ fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings)
         return Err("Pick at least one body part to stretch.".into());
     }
     write_settings(&app, &settings)?;
+    apply_tray_language(&app, settings.language);
     *state.settings.lock().unwrap() = Some(settings);
     state.restart_timer();
     Ok(())
@@ -300,12 +311,8 @@ fn open_toast(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let (ax, ay) = (area.position.x, area.position.y);
     let (aw, ah) = (area.size.width as i32, area.size.height as i32);
 
-    let rows = settings.body_parts.len().max(1) as f64;
-    let max_height = f64::from(ah) / scale - 2.0 * SCREEN_MARGIN;
-    let logical_height = (TOAST_BASE_HEIGHT + TOAST_ROW_HEIGHT * rows).min(max_height);
-
     let w = (TOAST_WIDTH * scale).round() as i32;
-    let h = (logical_height * scale).round() as i32;
+    let h = (TOAST_HEIGHT * scale).round() as i32;
     let m = (SCREEN_MARGIN * scale).round() as i32;
 
     let (target_x, y) = match settings.position {
@@ -320,8 +327,11 @@ fn open_toast(app: &AppHandle, settings: &Settings) -> Result<(), String> {
 
     WebviewWindowBuilder::new(app, TOAST, WebviewUrl::App("toast.html".into()))
         .title("Time to stretch!!")
-        .inner_size(TOAST_WIDTH, logical_height)
+        .inner_size(TOAST_WIDTH, TOAST_HEIGHT)
         .position(f64::from(start_x) / scale, f64::from(y) / scale)
+        // Transparent + no OS shadow, so the page can draw a rounded card.
+        .transparent(true)
+        .shadow(false)
         .decorations(false)
         .resizable(false)
         .maximizable(false)
@@ -406,12 +416,35 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Tray menu items, kept so their labels can follow the language setting.
+struct TrayMenu {
+    stretch: MenuItem<Wry>,
+    settings: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
+}
+
+fn apply_tray_language(app: &AppHandle, language: Language) {
+    let (stretch, settings, quit, tooltip) = match language {
+        Language::En => ("Stretch now", "Settings…", "Quit Stretch Reminder", "Stretch Reminder"),
+        Language::Ko => ("지금 스트레칭", "설정…", "스트레칭 알리미 종료", "스트레칭 알리미"),
+    };
+    if let Some(menu) = app.try_state::<TrayMenu>() {
+        let _ = menu.stretch.set_text(stretch);
+        let _ = menu.settings.set_text(settings);
+        let _ = menu.quit.set_text(quit);
+    }
+    if let Some(tray) = app.tray_by_id("tray") {
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let stretch = MenuItem::with_id(app, "stretch", "Stretch now", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Stretch Reminder", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&stretch, &settings, &separator, &quit])?;
+    app.manage(TrayMenu { stretch, settings, quit });
 
     let mut tray = TrayIconBuilder::with_id("tray")
         .tooltip("Stretch Reminder")
@@ -432,6 +465,16 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
+
+    let language = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|s| s.language)
+        .unwrap_or_default();
+    apply_tray_language(app.handle(), language);
     Ok(())
 }
 

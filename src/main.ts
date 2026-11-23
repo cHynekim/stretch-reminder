@@ -1,14 +1,18 @@
+import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
+import { hydrateSprites } from "./pixels";
+import { applyStatic, formatInterval, partName, partTip, setLanguage, t } from "./i18n";
 import {
-  BODY_PARTS,
+  BODY_PART_IDS,
   DEFAULT_SETTINGS,
   INTERVAL,
+  Language,
   Settings,
   Stats,
   ToastPosition,
   formatClock,
-  formatInterval,
   stepDuration,
+  systemLanguage,
 } from "./shared";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,20 +23,20 @@ let firstRun = true;
 
 function renderParts() {
   $("parts").replaceChildren(
-    ...BODY_PARTS.map((part) => {
+    ...BODY_PART_IDS.map((id) => {
       const label = document.createElement("label");
       label.className = "part-option";
       const box = document.createElement("input");
       box.type = "checkbox";
-      box.checked = settings.bodyParts.includes(part.id);
+      box.checked = settings.bodyParts.includes(id);
       box.addEventListener("change", () => {
-        settings.bodyParts = BODY_PARTS.map((p) => p.id).filter((id) =>
-          id === part.id ? box.checked : settings.bodyParts.includes(id),
+        settings.bodyParts = BODY_PART_IDS.filter((p) =>
+          p === id ? box.checked : settings.bodyParts.includes(p),
         );
         renderSummary();
       });
       const name = document.createElement("span");
-      name.textContent = part.name;
+      name.textContent = partName(id);
       label.append(box, name);
       return label;
     }),
@@ -41,15 +45,15 @@ function renderParts() {
 
 /** Stretch guide for the parts that are actually saved (what the notification will ask for). */
 function renderGuide() {
-  const parts = BODY_PARTS.filter((p) => saved?.bodyParts.includes(p.id));
+  const ids = BODY_PART_IDS.filter((id) => saved?.bodyParts.includes(id));
   $("guide").replaceChildren(
-    ...parts.map((p) => {
+    ...ids.map((id) => {
       const li = document.createElement("li");
       const name = document.createElement("strong");
-      name.textContent = p.name;
+      name.textContent = partName(id);
       const tip = document.createElement("span");
       tip.className = "muted small";
-      tip.textContent = p.tip;
+      tip.textContent = partTip(id);
       li.append(name, tip);
       return li;
     }),
@@ -60,26 +64,37 @@ function renderSummary() {
   $("interval-value").textContent = formatInterval(settings.intervalMinutes);
   $("duration-value").textContent = formatClock(settings.durationSeconds);
 
-  document.querySelectorAll<HTMLButtonElement>("#position button").forEach((b) => {
-    const on = b.dataset.value === settings.position;
-    b.classList.toggle("active", on);
-    b.setAttribute("aria-checked", String(on));
-  });
+  for (const [group, value] of [
+    ["position", settings.position],
+    ["language", settings.language],
+  ] as const) {
+    document.querySelectorAll<HTMLButtonElement>(`#${group} button`).forEach((b) => {
+      const on = b.dataset.value === value;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-checked", String(on));
+    });
+  }
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
-  const save = $<HTMLButtonElement>("save");
-  save.disabled = settings.bodyParts.length === 0 || (!firstRun && !dirty);
+  $<HTMLButtonElement>("save").disabled =
+    settings.bodyParts.length === 0 || (!firstRun && !dirty);
 }
 
-function applyMode() {
+/** Re-render every piece of text in the current language. */
+function renderLanguage() {
+  setLanguage(settings.language);
+  applyStatic();
   for (const id of ["details", "adjust-heading", "advanced", "quit", "test", "status"]) {
     $(id).hidden = firstRun;
   }
-  $("title").textContent = firstRun ? "Let's set up your stretch routine" : "Stretch Reminder";
-  $("subtitle").textContent = firstRun
-    ? "Pick what you want to stretch and how often. We'll let you know when it's time."
-    : "Closing this window keeps reminders running in the menu bar.";
-  $("save").textContent = firstRun ? "Start reminding me" : "Save changes";
+  $("title").textContent = t(firstRun ? "title.setup" : "title.main");
+  $("subtitle").textContent = t(firstRun ? "subtitle.setup" : "subtitle.main");
+  $("save").textContent = t(firstRun ? "start" : "save");
+  document.title = t("title.main");
+  renderParts();
+  renderGuide();
+  renderSummary();
+  refreshStatus();
 }
 
 function setMessage(text: string, tone: "ok" | "error" = "ok") {
@@ -115,8 +130,16 @@ function wireControls() {
     });
   });
 
+  document.querySelectorAll<HTMLButtonElement>("#language button").forEach((b) => {
+    b.addEventListener("click", () => {
+      settings.language = b.dataset.value as Language;
+      setMessage("");
+      renderLanguage();
+    });
+  });
+
   $("select-all").addEventListener("click", () => {
-    settings.bodyParts = BODY_PARTS.map((p) => p.id);
+    settings.bodyParts = [...BODY_PART_IDS];
     renderParts();
     renderSummary();
   });
@@ -130,15 +153,15 @@ function wireControls() {
     try {
       await invoke("save_settings", { settings });
       saved = structuredClone(settings);
-      renderGuide();
       if (firstRun) {
         firstRun = false;
-        applyMode();
+        renderLanguage();
         await invoke("hide_main");
       } else {
-        setMessage("Saved. The countdown has restarted.");
+        renderGuide();
+        renderSummary();
+        setMessage(t("saved"));
       }
-      renderSummary();
       refreshStatus();
     } catch (e) {
       setMessage(String(e), "error");
@@ -149,10 +172,24 @@ function wireControls() {
     invoke("stretch_now").catch((e) => setMessage(String(e), "error"));
   });
 
+  // Tauri webviews don't show window.confirm(), so confirm with an in-app toast.
+  const quitToast = $("quit-toast");
+  const closeQuitToast = () => {
+    quitToast.classList.remove("show");
+    setTimeout(() => {
+      if (!quitToast.classList.contains("show")) quitToast.hidden = true;
+    }, 200);
+    $("quit").focus();
+  };
   $("quit").addEventListener("click", () => {
-    if (confirm("Quit Stretch Reminder? You won't get any more reminders until you open it again.")) {
-      invoke("quit_app");
-    }
+    quitToast.hidden = false;
+    requestAnimationFrame(() => quitToast.classList.add("show"));
+    $("quit-cancel").focus();
+  });
+  $("quit-cancel").addEventListener("click", closeQuitToast);
+  $("quit-confirm").addEventListener("click", () => invoke("quit_app"));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !quitToast.hidden) closeQuitToast();
   });
 }
 
@@ -164,11 +201,15 @@ async function refreshStatus() {
       invoke<Stats>("get_stats"),
     ]);
     const next =
-      secs === null ? "Now" : secs >= 60 ? formatInterval(Math.ceil(secs / 60)) : `${secs}s`;
+      secs === null
+        ? t("stat.now")
+        : secs >= 60
+          ? formatInterval(Math.ceil(secs / 60))
+          : formatClock(secs);
     $("stat-next").textContent = next;
     $("stat-done").textContent = String(stats.completed);
     $("stat-missed").textContent = String(stats.missed);
-    $("status").textContent = secs === null ? "Time to stretch" : `Next in ${next}`;
+    $("status").textContent = secs === null ? t("status.now") : t("status.next", { t: next });
     $("status").classList.toggle("live", secs === null);
   } catch {
     /* backend not ready yet */
@@ -176,16 +217,15 @@ async function refreshStatus() {
 }
 
 async function init() {
-  saved = await invoke<Settings | null>("get_settings");
-  firstRun = saved === null;
-  if (saved) settings = { ...DEFAULT_SETTINGS, ...saved };
+  const loaded = await invoke<Settings | null>("get_settings");
+  firstRun = loaded === null;
+  // Same key order as `settings`, so the unsaved-changes check can compare JSON.
+  saved = loaded ? { ...DEFAULT_SETTINGS, ...loaded } : null;
+  settings = saved ? structuredClone(saved) : { ...DEFAULT_SETTINGS, language: systemLanguage() };
 
-  renderParts();
-  renderGuide();
+  hydrateSprites();
   wireControls();
-  applyMode();
-  renderSummary();
-  refreshStatus();
+  renderLanguage();
   setInterval(refreshStatus, 1000);
 }
 
