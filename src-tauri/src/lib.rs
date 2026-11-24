@@ -128,6 +128,65 @@ fn write_settings(app: &AppHandle, settings: &Settings) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Migration from the old identifier (v0.1.0)
+// ---------------------------------------------------------------------------
+
+/// v0.1.0 shipped with this identifier. On macOS any folder ending in `.app` is shown as an
+/// (unopenable) application, so v0.1.1 moved to `com.stretchreminder.desktop`.
+const LEGACY_IDENTIFIER: &str = "com.stretchreminder.app";
+const DATA_FILES: [&str; 2] = ["settings.json", "stats.json"];
+
+/// Move settings/stats from the old identifier's folder to the new one, once.
+/// Never loses data: the old files are only deleted after every copy succeeded, and if the
+/// new folder already has settings (already migrated, or set up fresh) nothing is touched.
+fn migrate_legacy_data(app: &AppHandle) {
+    let Ok(new_dir) = app.path().app_config_dir() else { return };
+    let Some(old_dir) = new_dir.parent().map(|p| p.join(LEGACY_IDENTIFIER)) else { return };
+    if old_dir == new_dir || !old_dir.is_dir() {
+        return;
+    }
+
+    if !new_dir.join("settings.json").exists() {
+        if fs::create_dir_all(&new_dir).is_err() {
+            return;
+        }
+        for name in DATA_FILES {
+            let from = old_dir.join(name);
+            if from.exists() && fs::copy(&from, new_dir.join(name)).is_err() {
+                return; // keep the old data; try again next launch
+            }
+        }
+    }
+
+    // Copied (or already present in the new folder): remove the old files, then the folder
+    // itself, but only if nothing else is left in it.
+    for name in DATA_FILES {
+        let _ = fs::remove_file(old_dir.join(name));
+    }
+    let _ = fs::remove_dir(&old_dir);
+
+    remove_legacy_webview_caches(app);
+}
+
+/// macOS also kept webview caches under the old identifier (also `.app` folders).
+/// They're regenerated under the new identifier, so the old ones can go.
+#[cfg(target_os = "macos")]
+fn remove_legacy_webview_caches(app: &AppHandle) {
+    let Ok(home) = app.path().home_dir() else { return };
+    for dir in [
+        home.join("Library/Caches").join(LEGACY_IDENTIFIER),
+        home.join("Library/WebKit").join(LEGACY_IDENTIFIER),
+    ] {
+        if dir.is_dir() {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn remove_legacy_webview_caches(_app: &AppHandle) {}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -610,6 +669,7 @@ pub fn run() {
             dismiss_toast,
         ])
         .setup(|app| {
+            migrate_legacy_data(app.handle()); // must run before anything reads settings/stats
             let saved = load_settings(app.handle());
             app.manage(AppState {
                 // Reminders wait until today's plan is confirmed.
