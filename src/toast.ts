@@ -1,8 +1,18 @@
 import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
-import { hydrateSprites } from "./pixels";
-import { applyStatic, formatInterval, partName, partTip, randomTitle, setLanguage, t } from "./i18n";
-import { BODY_PART_IDS, HOLD_SECONDS, Settings, formatClock } from "./shared";
+import {
+  applyStatic,
+  formatInterval,
+  partName,
+  partTip,
+  randomCheer,
+  randomFinalCheer,
+  randomTitle,
+  setLanguage,
+  t,
+} from "./i18n";
+import { BODY_PART_IDS, HOLD_SECONDS, Settings, Stats, formatClock, normalizeParts } from "./shared";
+import { startSparkles } from "./sparkles";
 
 /**
  * A small square notification that closes on its own after `durationSeconds`,
@@ -30,6 +40,7 @@ const NAG_MS = 3_000;
 let items: Item[] = [];
 let openItem: Item | null = null;
 let intervalMinutes = 60;
+let finalOfDay = false; // this completion reaches today's goal; the app quits afterwards
 let lifetimeMs = 60_000;
 let shownAt = Date.now();
 let lastTick = Date.now();
@@ -150,10 +161,11 @@ function render() {
     ? t("toast.wait", { s: Math.ceil((cooldownUntil - now) / 1000) })
     : done < total
       ? `${t("toast.complete")} ${done}/${total}`
-      : `${t("toast.complete")} ★`;
+      : t("toast.complete");
 
   const bar = $("lifetime-bar");
-  bar.style.width = engaged ? "100%" : `${(left / lifetimeMs) * 100}%`;
+  // Before starting: time left until auto-close. After starting: stretching progress, from 0.
+  bar.style.width = engaged ? `${(done / total) * 100}%` : `${(left / lifetimeMs) * 100}%`;
   bar.classList.toggle("engaged", engaged);
 }
 
@@ -198,21 +210,41 @@ function onComplete() {
   }
 
   finished = true;
-  say(t("toast.nice", { t: formatInterval(intervalMinutes) }), "ok", 5000);
-  render();
   $<HTMLButtonElement>("complete").disabled = true;
-  setTimeout(() => invoke("complete_stretch").catch(() => {}), 1200);
+  showCelebration();
+}
+
+const CELEBRATE_MS = 5000; // the reward message closes itself after this long
+
+/** Reward message over pixel sparkles; it closes itself and finishes the session. */
+function showCelebration() {
+  const cheer = finalOfDay ? randomFinalCheer() : randomCheer(formatInterval(intervalMinutes));
+  $("cheer-title").textContent = cheer.title;
+  $("cheer-body").textContent = cheer.body;
+
+  const modal = $("celebrate");
+  modal.hidden = false;
+  $("card").classList.add("celebrating");
+  const stop = startSparkles($<HTMLCanvasElement>("sparkles"));
+  requestAnimationFrame(() => modal.classList.add("show"));
+
+  setTimeout(() => {
+    stop();
+    invoke("complete_stretch").catch(() => {});
+  }, CELEBRATE_MS);
 }
 
 async function init() {
-  const settings = await invoke<Settings | null>("get_settings");
+  const [settings, stats] = await Promise.all([
+    invoke<Settings | null>("get_settings"),
+    invoke<Stats>("get_stats"),
+  ]);
+  finalOfDay = !!settings && stats.completed + 1 >= settings.goal;
   setLanguage(settings?.language ?? "en");
   applyStatic();
-  hydrateSprites();
   $("toast-title").textContent = randomTitle();
 
-  const selected = new Set(settings?.bodyParts ?? []);
-  const ids = BODY_PART_IDS.filter((id) => selected.has(id));
+  const ids = normalizeParts(settings?.bodyParts ?? []);
 
   intervalMinutes = settings?.intervalMinutes ?? 60;
   lifetimeMs = (settings?.durationSeconds ?? 60) * 1000;
@@ -224,7 +256,7 @@ async function init() {
   // Clicking the notification itself (anything on the card that isn't a button) opens the app.
   document.addEventListener("click", (e) => {
     const target = e.target as Element;
-    if (target.closest("button") || !target.closest(".toast-card")) return;
+    if (target.closest("button") || target.closest(".celebrate") || !target.closest(".toast-card")) return;
     invoke("open_main").catch(() => {});
   });
   document.addEventListener("pointerdown", activity);

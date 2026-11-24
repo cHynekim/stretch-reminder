@@ -9,7 +9,6 @@
     <div class="toast-card" id="card">
       <div class="lifetime" aria-hidden="true"><span id="lifetime-bar"></span></div>
       <header class="toast-head" data-i18n-title="toast.open">
-        <i class="sprite" data-sprite="blob" data-px="3"></i>
         <h1 id="toast-title">Time to Stretch!!</h1>
         <p class="toast-sub" id="toast-sub" role="status"></p>
       </header>
@@ -17,6 +16,15 @@
       <ul class="toast-list" id="list"></ul>
 
       <button type="button" class="btn wide" id="complete">Complete</button>
+
+      <!-- Reward modal shown after "Complete" -->
+      <div class="celebrate" id="celebrate" role="dialog" aria-modal="true" aria-labelledby="cheer-title" hidden>
+        <canvas class="sparkles" id="sparkles" aria-hidden="true"></canvas>
+        <div class="celebrate-panel">
+          <h2 id="cheer-title"></h2>
+          <p id="cheer-body"></p>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/toast.ts"></script>
   </body>

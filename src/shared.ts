@@ -8,12 +8,49 @@ export interface Settings {
   intervalMinutes: number;
   position: ToastPosition;
   durationSeconds: number;
+  /** Stretches to complete today. Reaching it ends the day (the app quits). */
+  goal: number;
+  /** Local day ("YYYY-MM-DD") today's interval + goal were confirmed. Set by the backend. */
+  planDay: string;
 }
 
-/** Mirrors `Stats` in src-tauri/src/lib.rs. */
+/** Mirrors `Stats` in src-tauri/src/lib.rs. Counts for today. */
 export interface Stats {
+  day: string;
   completed: number;
   missed: number;
+  /** Outcomes in order: "c" = completed, "m" = missed. */
+  events: string;
+}
+
+export const GOAL = { min: 1, max: 20, step: 1 };
+
+/** End of the workday (6 PM, local time), used to suggest how many stretches still fit today. */
+export const WORKDAY_END_HOUR = 18;
+
+/** Minutes from now until 6 PM today (0 once it has passed). */
+export function minutesUntilWorkdayEnd(now = new Date()): number {
+  const end = new Date(now);
+  end.setHours(WORKDAY_END_HOUR, 0, 0, 0);
+  return Math.max(0, Math.floor((end.getTime() - now.getTime()) / 60000));
+}
+
+/** How many stretches fit between now and 6 PM at this interval. */
+export function maxStretchesToday(intervalMinutes: number, now = new Date()): number {
+  return Math.floor(minutesUntilWorkdayEnd(now) / intervalMinutes);
+}
+
+/** e.g. 3725 → "01:02:05" */
+export function formatHMS(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+}
+
+/** Today's local date as YYYY-MM-DD; the key the backend uses for daily stats. */
+export function localDay(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** Body part ids, in display order. Names and tips live in i18n.ts. */
@@ -24,11 +61,23 @@ export const BODY_PART_IDS = [
   "lower-back",
   "chest",
   "wrists",
-  "hips",
-  "hamstrings",
-  "calves",
+  "arms",
+  "lower-body",
 ] as const;
 export type BodyPartId = (typeof BODY_PART_IDS)[number];
+
+/** Ids from older versions, mapped to their current replacement. */
+const LEGACY_PARTS: Record<string, BodyPartId> = {
+  hips: "lower-body",
+  hamstrings: "lower-body",
+  calves: "lower-body",
+};
+
+/** Map legacy ids, drop unknown ones, de-duplicate, keep display order. */
+export function normalizeParts(ids: string[]): BodyPartId[] {
+  const wanted = new Set(ids.map((id) => LEGACY_PARTS[id] ?? id));
+  return BODY_PART_IDS.filter((id) => wanted.has(id));
+}
 
 export const INTERVAL = { min: 15, max: 240, step: 15 };
 
@@ -59,6 +108,8 @@ export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 60,
   position: "right-bottom",
   durationSeconds: 60,
+  goal: 6,
+  planDay: "",
 };
 
 export function formatClock(totalSeconds: number): string {

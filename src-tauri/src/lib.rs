@@ -57,6 +57,11 @@ struct Settings {
     interval_minutes: u32,
     position: ToastPosition,
     duration_seconds: u32,
+    /// Stretches to complete today. Reaching it ends the day (the app quits).
+    goal: u32,
+    /// The local day ("YYYY-MM-DD") the user last confirmed interval + goal.
+    /// Reminders only run when this is today.
+    plan_day: String,
 }
 
 impl Default for Settings {
@@ -67,12 +72,14 @@ impl Default for Settings {
             interval_minutes: 60,
             position: ToastPosition::RightBottom,
             duration_seconds: 60,
+            goal: 6,
+            plan_day: String::new(),
         }
     }
 }
 
 impl Settings {
-    /// Interval: 15 min – 4 h in 15 min steps.
+    /// Interval: 15 min – 4 h in 15 min steps. Goal: 1–20.
     /// Notification lifetime: 20 s – 1 min in 10 s steps, then 30 s steps up to 7 min.
     fn sanitized(mut self) -> Self {
         let mut seen = HashSet::new();
@@ -80,12 +87,22 @@ impl Settings {
         self.interval_minutes = self.interval_minutes.clamp(15, 240) / 15 * 15;
         let d = self.duration_seconds.clamp(20, 420);
         self.duration_seconds = if d <= 60 { d / 10 * 10 } else { d / 30 * 30 };
+        self.goal = self.goal.clamp(1, 20);
         self
     }
 
     fn interval(&self) -> Duration {
         Duration::from_secs(u64::from(self.interval_minutes) * 60)
     }
+
+    fn planned_today(&self) -> bool {
+        self.plan_day == today()
+    }
+}
+
+/// Today's local date, "YYYY-MM-DD".
+fn today() -> String {
+    chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
@@ -126,20 +143,70 @@ struct AppState {
     stats: Mutex<Stats>,
 }
 
-/// Counted since launch. Mirrors `Stats` in src/shared.ts.
-#[derive(Clone, Copy, Debug, Default, Serialize)]
+/// Counts for one local day ("YYYY-MM-DD"). Saved to stats.json. Mirrors `Stats` in src/shared.ts.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 struct Stats {
+    day: String,
     completed: u32,
     missed: u32,
+    /// Outcomes in order: 'c' = completed, 'm' = missed. Drives the circles in Details.
+    events: String,
+}
+
+impl Stats {
+    /// These stats if they're today's, otherwise an empty day.
+    fn for_today(&self) -> Stats {
+        let day = today();
+        if self.day == day {
+            self.clone()
+        } else {
+            Stats { day, ..Stats::default() }
+        }
+    }
+}
+
+fn stats_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("stats.json"))
+}
+
+fn load_stats(app: &AppHandle) -> Stats {
+    stats_path(app)
+        .and_then(|p| fs::read_to_string(p).ok())
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+/// Update today's counts (starting fresh if the day changed), save them, and
+/// return the updated stats.
+fn record_stat(app: &AppHandle, update: impl FnOnce(&mut Stats)) -> Stats {
+    let state = app.state::<AppState>();
+    let mut stats = state.stats.lock().unwrap();
+    *stats = stats.for_today();
+    update(&mut stats);
+    if let (Some(path), Ok(json)) = (stats_path(app), serde_json::to_string_pretty(&*stats)) {
+        if let Some(dir) = path.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        let _ = fs::write(path, json);
+    }
+    stats.clone()
 }
 
 /// A missed reminder comes back after this long instead of a full interval.
 const MISSED_RETRY: Duration = Duration::from_secs(5 * 60);
 
 impl AppState {
+    /// Start a full interval, but only if today's plan has been confirmed.
     fn restart_timer(&self) {
         let settings = self.settings.lock().unwrap();
-        *self.next_due.lock().unwrap() = settings.as_ref().map(|s| Instant::now() + s.interval());
+        *self.next_due.lock().unwrap() = settings
+            .as_ref()
+            .filter(|s| s.planned_today())
+            .map(|s| Instant::now() + s.interval());
     }
 }
 
@@ -153,8 +220,9 @@ fn get_settings(state: State<'_, AppState>) -> Option<Settings> {
 }
 
 #[tauri::command]
+/// Saving always confirms today's plan (interval + goal), which (re)starts reminders.
 fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
-    let settings = settings.sanitized();
+    let settings = Settings { plan_day: today(), ..settings }.sanitized();
     if settings.body_parts.is_empty() {
         return Err("Pick at least one body part to stretch.".into());
     }
@@ -167,7 +235,7 @@ fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings)
 
 #[tauri::command]
 fn get_stats(state: State<'_, AppState>) -> Stats {
-    *state.stats.lock().unwrap()
+    state.stats.lock().unwrap().for_today()
 }
 
 #[tauri::command]
@@ -231,27 +299,41 @@ async fn nudge_toast(app: AppHandle) {
     }
 }
 
-/// The page verified every part was stretched.
+/// The page verified every part was stretched. Reaching today's goal ends the
+/// day: the toast slides away and the app quits.
 #[tauri::command]
 async fn complete_stretch(app: AppHandle) {
+    let stats = record_stat(&app, |s| {
+        s.completed += 1;
+        s.events.push('c');
+    });
     let state = app.state::<AppState>();
-    state.stats.lock().unwrap().completed += 1;
-    state.restart_timer();
-    slide_out_toast(&app);
+    let goal = state.settings.lock().unwrap().as_ref().map_or(u32::MAX, |s| s.goal);
+    let goal_reached = stats.completed >= goal;
+    if !goal_reached {
+        state.restart_timer();
+    }
+    slide_out_toast(&app, goal_reached);
 }
 
 /// The notification timed out before the user started stretching.
 #[tauri::command]
 async fn dismiss_toast(app: AppHandle) {
+    record_stat(&app, |s| {
+        s.missed += 1;
+        s.events.push('m');
+    });
     let state = app.state::<AppState>();
-    state.stats.lock().unwrap().missed += 1;
     *state.next_due.lock().unwrap() = Some(Instant::now() + MISSED_RETRY);
-    slide_out_toast(&app);
+    slide_out_toast(&app, false);
 }
 
-fn slide_out_toast(app: &AppHandle) {
+fn slide_out_toast(app: &AppHandle, then_quit: bool) {
     let Some(win) = app.get_webview_window(TOAST) else {
         app.state::<AppState>().toast_open.store(false, Ordering::SeqCst);
+        if then_quit {
+            app.exit(0);
+        }
         return;
     };
     let handle = app.clone();
@@ -260,6 +342,9 @@ fn slide_out_toast(app: &AppHandle) {
         move || {
             let _ = win.destroy();
             handle.state::<AppState>().toast_open.store(false, Ordering::SeqCst);
+            if then_quit {
+                handle.exit(0);
+            }
         }
     };
     match (win.outer_position(), right_edge(&win)) {
@@ -280,6 +365,10 @@ fn show_toast(app: &AppHandle) -> Result<(), String> {
         .unwrap()
         .clone()
         .ok_or("Set up your stretch routine first.")?;
+    if !settings.planned_today() {
+        show_main(app); // ask for today's interval + goal first
+        return Err("Set today's plan first.".into());
+    }
 
     // Already showing: just bring it forward.
     if state.toast_open.swap(true, Ordering::SeqCst) {
@@ -400,6 +489,19 @@ fn spawn_scheduler(app: AppHandle) {
         if state.toast_open.load(Ordering::SeqCst) {
             continue;
         }
+        // A new day started while the app was running: pause and ask for today's plan.
+        let stale_plan = state
+            .settings
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|s| !s.planned_today());
+        if stale_plan {
+            if state.next_due.lock().unwrap().take().is_some() {
+                show_main(&app);
+            }
+            continue;
+        }
         let due = *state.next_due.lock().unwrap();
         if matches!(due, Some(d) if Instant::now() >= d) && show_toast(&app).is_err() {
             // Try again in a minute rather than every second.
@@ -498,11 +600,17 @@ pub fn run() {
         .setup(|app| {
             let saved = load_settings(app.handle());
             app.manage(AppState {
-                next_due: Mutex::new(saved.as_ref().map(|s| Instant::now() + s.interval())),
+                // Reminders wait until today's plan is confirmed.
+                next_due: Mutex::new(
+                    saved
+                        .as_ref()
+                        .filter(|s| s.planned_today())
+                        .map(|s| Instant::now() + s.interval()),
+                ),
                 settings: Mutex::new(saved),
                 toast_open: AtomicBool::new(false),
                 toast_slide_in: Mutex::new(None),
-                stats: Mutex::new(Stats::default()),
+                stats: Mutex::new(load_stats(app.handle())),
             });
             build_tray(app)?;
             spawn_scheduler(app.handle().clone());

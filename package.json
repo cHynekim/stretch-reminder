@@ -10,9 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fontsource/dotgothic16": "^5.3.1",
-    "@tauri-apps/api": "^2.12.5",
-    "galmuri": "^2.40.3"
+    "@tauri-apps/api": "^2.12.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.6",

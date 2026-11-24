@@ -8,56 +8,42 @@
   <body class="settings">
     <main class="wrap">
       <header class="hero">
-        <i class="sprite hero-sprite" data-sprite="blob" data-px="5"></i>
-        <div class="hero-text">
-          <h1 id="title"></h1>
-          <p id="subtitle" class="muted"></p>
-        </div>
-        <span id="status" class="pill" hidden></span>
+        <!-- Start-screen motif: dotted circles filling in a loop (setup screens only) -->
+        <div class="motif" aria-hidden="true"><i></i><i></i><i></i></div>
+        <h1 id="title"></h1>
+        <p id="subtitle" class="muted"></p>
       </header>
 
-      <!-- Details: only after setup -->
+      <!-- 1. Details (only after setup) -->
       <section class="card" id="details" hidden>
-        <h2 data-i18n="details"></h2>
-        <div class="stats">
-          <div class="stat">
-            <i class="sprite" data-sprite="drop" data-px="3"></i>
-            <span class="stat-num" id="stat-next">–</span><span class="muted small" data-i18n="stat.next"></span>
-          </div>
-          <div class="stat">
-            <i class="sprite" data-sprite="heart" data-px="3"></i>
-            <span class="stat-num" id="stat-done">0</span><span class="muted small" data-i18n="stat.done"></span>
-          </div>
-          <div class="stat">
-            <i class="sprite" data-sprite="sprout" data-px="3"></i>
-            <span class="stat-num" id="stat-missed">0</span><span class="muted small" data-i18n="stat.missed"></span>
-          </div>
+        <div class="card-head">
+          <h2 data-i18n="details"></h2>
+          <span class="muted small" id="today"></span>
         </div>
-        <p class="muted small" data-i18n="stat.note"></p>
-        <h2 class="mt" data-i18n="yourStretches"></h2>
-        <ol id="guide" class="guide"></ol>
+        <div class="countdown">
+          <span class="muted small" data-i18n="stat.next"></span>
+          <span class="countdown-num" id="countdown">--:--:--</span>
+        </div>
+        <p class="legend small">
+          <span><i class="mini done"></i><span id="legend-done"></span></span>
+          <span><i class="mini missed"></i><span id="legend-missed"></span></span>
+          <span><i class="mini"></i><span id="legend-goal"></span></span>
+        </p>
       </section>
 
-      <h2 id="adjust-heading" class="section-title" data-i18n="adjustments" hidden></h2>
-
-      <section class="card">
-        <h2>Language · 언어</h2>
-        <div class="segmented two" id="language" role="radiogroup" aria-label="Language">
-          <button type="button" role="radio" data-value="en" lang="en">English</button>
-          <button type="button" role="radio" data-value="ko" lang="ko">한국어</button>
+      <!-- 2. Body parts -->
+      <section class="card" id="parts-card">
+        <div class="card-head">
+          <h2 data-i18n="bodyParts"></h2>
+          <div class="row-actions">
+            <button type="button" id="select-all" class="link" data-i18n="selectAll"></button>
+            <button type="button" id="select-none" class="link danger" data-i18n="clear"></button>
+          </div>
         </div>
-      </section>
-
-      <section class="card">
-        <h2 data-i18n="bodyParts"></h2>
-        <p class="muted small" data-i18n="chooseOne"></p>
         <div id="parts" class="parts-grid"></div>
-        <div class="row-actions">
-          <button type="button" id="select-all" class="link" data-i18n="selectAll"></button>
-          <button type="button" id="select-none" class="link" data-i18n="clear"></button>
-        </div>
       </section>
 
+      <!-- 3. Remind me every + today's goal (asked again each new day) -->
       <section class="card">
         <h2 data-i18n="remindEvery"></h2>
         <div class="stepper" data-stepper="interval">
@@ -65,18 +51,27 @@
           <output id="interval-value"></output>
           <button type="button" class="step" data-dir="1" data-i18n-aria="interval.inc">+</button>
         </div>
-        <p class="muted small center" data-i18n="interval.hint"></p>
+
+        <h2 class="mt" data-i18n="goal"></h2>
+        <div class="stepper" data-stepper="goal">
+          <button type="button" class="step" data-dir="-1" data-i18n-aria="goal.dec">−</button>
+          <output id="goal-value"></output>
+          <button type="button" class="step" data-dir="1" data-i18n-aria="goal.inc">+</button>
+        </div>
+        <p class="muted small center" id="goal-hint"></p>
       </section>
 
+      <!-- 4. Notification settings (only after setup) -->
       <section class="card" id="advanced" hidden>
-        <h2 data-i18n="position"></h2>
+        <h2 data-i18n="notification"></h2>
+        <p class="label" data-i18n="position"></p>
         <div class="segmented" id="position" role="radiogroup">
           <button type="button" role="radio" data-value="right-top" data-i18n="pos.right-top"></button>
           <button type="button" role="radio" data-value="right-bottom" data-i18n="pos.right-bottom"></button>
           <button type="button" role="radio" data-value="middle" data-i18n="pos.middle"></button>
         </div>
 
-        <h2 class="mt" data-i18n="staysFor"></h2>
+        <p class="label mt" data-i18n="staysFor"></p>
         <div class="stepper" data-stepper="duration">
           <button type="button" class="step" data-dir="-1" data-i18n-aria="duration.dec">−</button>
           <output id="duration-value"></output>
@@ -85,11 +80,20 @@
         <p class="muted small center" data-i18n="duration.hint"></p>
       </section>
 
+      <!-- 5. Language -->
+      <section class="card" id="language-card">
+        <h2>Language · 언어</h2>
+        <div class="segmented two" id="language" role="radiogroup" aria-label="Language">
+          <button type="button" role="radio" data-value="en" lang="en">English</button>
+          <button type="button" role="radio" data-value="ko" lang="ko">한국어</button>
+        </div>
+      </section>
+
       <footer class="actions">
-        <button type="button" id="quit" class="btn danger" data-i18n="quit" hidden></button>
+        <button type="button" id="quit" class="btn ghost-danger" data-i18n="quit" hidden></button>
         <div class="buttons">
           <button type="button" id="test" class="btn secondary" data-i18n="test" hidden></button>
-          <button type="button" id="save" class="btn"></button>
+          <button type="button" id="save" class="btn primary"></button>
         </div>
       </footer>
       <p id="message" class="message" role="status"></p>

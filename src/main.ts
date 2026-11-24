@@ -1,25 +1,41 @@
 import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
-import { hydrateSprites } from "./pixels";
-import { applyStatic, formatInterval, partName, partTip, setLanguage, t } from "./i18n";
+import { applyStatic, formatDate, formatInterval, partName, setLanguage, t } from "./i18n";
 import {
   BODY_PART_IDS,
   DEFAULT_SETTINGS,
+  GOAL,
   INTERVAL,
   Language,
   Settings,
   Stats,
   ToastPosition,
   formatClock,
+  formatHMS,
+  localDay,
+  maxStretchesToday,
+  normalizeParts,
   stepDuration,
   systemLanguage,
 } from "./shared";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/**
+ * first:  never set up → body parts, schedule, language
+ * daily:  set up, but today's interval + goal not confirmed yet → schedule only
+ * normal: everything
+ */
+type Mode = "first" | "daily" | "normal";
+
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let saved: Settings | null = null;
-let firstRun = true;
+let mode: Mode = "first";
+
+function computeMode(): Mode {
+  if (!saved) return "first";
+  return saved.planDay === localDay() ? "normal" : "daily";
+}
 
 function renderParts() {
   $("parts").replaceChildren(
@@ -43,26 +59,11 @@ function renderParts() {
   );
 }
 
-/** Stretch guide for the parts that are actually saved (what the notification will ask for). */
-function renderGuide() {
-  const ids = BODY_PART_IDS.filter((id) => saved?.bodyParts.includes(id));
-  $("guide").replaceChildren(
-    ...ids.map((id) => {
-      const li = document.createElement("li");
-      const name = document.createElement("strong");
-      name.textContent = partName(id);
-      const tip = document.createElement("span");
-      tip.className = "muted small";
-      tip.textContent = partTip(id);
-      li.append(name, tip);
-      return li;
-    }),
-  );
-}
-
 function renderSummary() {
   $("interval-value").textContent = formatInterval(settings.intervalMinutes);
   $("duration-value").textContent = formatClock(settings.durationSeconds);
+  $("goal-value").textContent = t("goal.value", { n: settings.goal });
+  renderGoalHint();
 
   for (const [group, value] of [
     ["position", settings.position],
@@ -77,22 +78,41 @@ function renderSummary() {
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
   $<HTMLButtonElement>("save").disabled =
-    settings.bodyParts.length === 0 || (!firstRun && !dirty);
+    settings.bodyParts.length === 0 || (mode === "normal" && !dirty);
 }
 
-/** Re-render every piece of text in the current language. */
+/** "From now until 6 PM, this interval fits up to N." Recomputed as the clock moves. */
+function renderGoalHint() {
+  const n = maxStretchesToday(settings.intervalMinutes);
+  $("goal-hint").textContent = n > 0 ? t("goal.hint", { n }) : t("goal.hintLate");
+}
+
+/** Re-render every piece of text in the current language and mode. */
 function renderLanguage() {
   setLanguage(settings.language);
   applyStatic();
-  for (const id of ["details", "adjust-heading", "advanced", "quit", "test", "status"]) {
-    $(id).hidden = firstRun;
-  }
-  $("title").textContent = t(firstRun ? "title.setup" : "title.main");
-  $("subtitle").textContent = t(firstRun ? "subtitle.setup" : "subtitle.main");
-  $("save").textContent = t(firstRun ? "start" : "save");
+  // Setup screens (first run, daily plan) get the centred, box-less start-screen look.
+  document.body.classList.toggle("setup", mode !== "normal");
+
+  const visible: Record<string, Mode[]> = {
+    details: ["normal"],
+    "parts-card": ["first", "normal"],
+    advanced: ["normal"],
+    "language-card": ["first", "normal"],
+    quit: ["normal"],
+    test: ["normal"],
+  };
+  for (const [id, modes] of Object.entries(visible)) $(id).hidden = !modes.includes(mode);
+
+  const title = { first: "title.setup", daily: "title.daily", normal: "title.main" } as const;
+  const subtitle = { first: "subtitle.setup", daily: "subtitle.daily", normal: "subtitle.main" } as const;
+  const action = { first: "start", daily: "startDay", normal: "save" } as const;
+  $("title").textContent = t(title[mode]);
+  $("subtitle").textContent = t(subtitle[mode]);
+  $("save").textContent = t(action[mode]);
   document.title = t("title.main");
+
   renderParts();
-  renderGuide();
   renderSummary();
   refreshStatus();
 }
@@ -115,6 +135,8 @@ function wireControls() {
         const dir = Number(btn.dataset.dir) as 1 | -1;
         if (kind === "interval") {
           settings.intervalMinutes = clamp(settings.intervalMinutes + dir * INTERVAL.step, INTERVAL);
+        } else if (kind === "goal") {
+          settings.goal = clamp(settings.goal + dir * GOAL.step, GOAL);
         } else {
           settings.durationSeconds = stepDuration(settings.durationSeconds, dir);
         }
@@ -152,17 +174,17 @@ function wireControls() {
   $("save").addEventListener("click", async () => {
     try {
       await invoke("save_settings", { settings });
+      // The backend stamps today's date as the plan day.
+      settings = { ...settings, planDay: localDay() };
       saved = structuredClone(settings);
-      if (firstRun) {
-        firstRun = false;
-        renderLanguage();
+      const wasSetup = mode !== "normal";
+      mode = "normal";
+      renderLanguage();
+      if (wasSetup) {
         await invoke("hide_main");
       } else {
-        renderGuide();
-        renderSummary();
         setMessage(t("saved"));
       }
-      refreshStatus();
     } catch (e) {
       setMessage(String(e), "error");
     }
@@ -193,24 +215,40 @@ function wireControls() {
   });
 }
 
+/** Summary line under the countdown: done · missed · goal. */
+function renderSummaryLine(stats: Stats, goal: number) {
+  $("legend-done").textContent = t("legend.done", { n: stats.completed });
+  $("legend-missed").textContent = t("legend.missed", { n: stats.missed });
+  $("legend-goal").textContent = t("legend.goal", { n: goal });
+}
+
+/** Each new day starts from a 1-hour interval; the goal keeps yesterday's value if it still fits before 6 PM. */
+function applyDailyDefaults() {
+  settings.intervalMinutes = 60;
+  const fits = maxStretchesToday(settings.intervalMinutes);
+  if (fits > 0) settings.goal = clamp(settings.goal, { min: GOAL.min, max: fits });
+}
+
 async function refreshStatus() {
-  if (firstRun) return;
+  renderGoalHint();
+  // A new day may have started while the window was open.
+  if (saved && mode === "normal" && computeMode() === "daily") {
+    mode = "daily";
+    applyDailyDefaults();
+    renderLanguage();
+    return;
+  }
+  if (mode !== "normal") return;
+  $("today").textContent = formatDate(new Date());
   try {
     const [secs, stats] = await Promise.all([
       invoke<number | null>("seconds_until_next"),
       invoke<Stats>("get_stats"),
     ]);
-    const next =
-      secs === null
-        ? t("stat.now")
-        : secs >= 60
-          ? formatInterval(Math.ceil(secs / 60))
-          : formatClock(secs);
-    $("stat-next").textContent = next;
-    $("stat-done").textContent = String(stats.completed);
-    $("stat-missed").textContent = String(stats.missed);
-    $("status").textContent = secs === null ? t("status.now") : t("status.next", { t: next });
-    $("status").classList.toggle("live", secs === null);
+    const countdown = $("countdown");
+    countdown.textContent = secs === null ? t("stat.now") : formatHMS(secs);
+    countdown.classList.toggle("live", secs === null);
+    renderSummaryLine(stats, saved?.goal ?? settings.goal);
   } catch {
     /* backend not ready yet */
   }
@@ -218,12 +256,14 @@ async function refreshStatus() {
 
 async function init() {
   const loaded = await invoke<Settings | null>("get_settings");
-  firstRun = loaded === null;
   // Same key order as `settings`, so the unsaved-changes check can compare JSON.
-  saved = loaded ? { ...DEFAULT_SETTINGS, ...loaded } : null;
+  saved = loaded
+    ? { ...DEFAULT_SETTINGS, ...loaded, bodyParts: normalizeParts(loaded.bodyParts) }
+    : null;
   settings = saved ? structuredClone(saved) : { ...DEFAULT_SETTINGS, language: systemLanguage() };
+  mode = computeMode();
+  if (mode !== "normal") applyDailyDefaults();
 
-  hydrateSprites();
   wireControls();
   renderLanguage();
   setInterval(refreshStatus, 1000);
