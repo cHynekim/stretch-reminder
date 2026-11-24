@@ -71,7 +71,7 @@ impl Default for Settings {
             body_parts: Vec::new(),
             interval_minutes: 60,
             position: ToastPosition::RightBottom,
-            duration_seconds: 60,
+            duration_seconds: 20,
             goal: 6,
             plan_day: String::new(),
         }
@@ -254,6 +254,17 @@ fn open_main(app: AppHandle) {
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
+}
+
+/// The OS's primary language, for the first launch: "ko" if it's Korean, otherwise "en".
+/// Read natively because the webview's `navigator.language` follows the app bundle's
+/// localizations on macOS and can say "en-US" on a Korean system.
+#[tauri::command]
+fn system_language() -> Language {
+    match sys_locale::get_locale() {
+        Some(locale) if locale.to_lowercase().starts_with("ko") => Language::Ko,
+        _ => Language::En,
+    }
 }
 
 /// Seconds until the next reminder, or `None` if paused / a stretch is in progress.
@@ -590,6 +601,7 @@ pub fn run() {
             hide_main,
             open_main,
             quit_app,
+            system_language,
             seconds_until_next,
             stretch_now,
             toast_ready,

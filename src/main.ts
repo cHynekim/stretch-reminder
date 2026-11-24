@@ -98,7 +98,8 @@ function renderLanguage() {
     details: ["normal"],
     "parts-card": ["first", "normal"],
     advanced: ["normal"],
-    "language-card": ["first", "normal"],
+    // First launch picks the language from the OS (Korean → ko, anything else → en); change it later here.
+    "language-card": ["normal"],
     quit: ["normal"],
     test: ["normal"],
   };
@@ -260,7 +261,11 @@ async function init() {
   saved = loaded
     ? { ...DEFAULT_SETTINGS, ...loaded, bodyParts: normalizeParts(loaded.bodyParts) }
     : null;
-  settings = saved ? structuredClone(saved) : { ...DEFAULT_SETTINGS, language: systemLanguage() };
+  // First launch: Korean if the OS's primary language is Korean, English for everything else.
+  const firstLanguage = saved
+    ? saved.language
+    : await invoke<Language>("system_language").catch(() => systemLanguage());
+  settings = saved ? structuredClone(saved) : { ...DEFAULT_SETTINGS, language: firstLanguage };
   mode = computeMode();
   if (mode !== "normal") applyDailyDefaults();
 

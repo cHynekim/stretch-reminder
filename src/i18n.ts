@@ -24,6 +24,9 @@ const en = {
   "goal.dec": "One fewer",
   "goal.inc": "One more",
   bodyParts: "Body parts",
+  // People who sit for long hours most often report neck/shoulder and lower-back symptoms, and
+  // long sitting is linked to stiffer hips, so one pick per area spreads the stretching evenly.
+  "parts.guide": "Mixing neck/shoulders, upper and lower body works best.",
   selectAll: "Select all",
   clear: "Clear",
   remindEvery: "Remind me every",
@@ -88,6 +91,7 @@ const ko: Record<Key, string> = {
   "goal.dec": "1회 줄이기",
   "goal.inc": "1회 늘리기",
   bodyParts: "스트레칭 부위",
+  "parts.guide": "목·어깨, 상체, 하체에서 하나씩 고르면 더 효과적이에요.",
   selectAll: "전체 선택",
   clear: "선택 해제",
   remindEvery: "알림 간격",

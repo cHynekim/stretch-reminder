@@ -99,7 +99,7 @@ export const HOLD_SECONDS = 7;
 
 /** Language to suggest on first launch, from the OS/browser locale. */
 export function systemLanguage(): Language {
-  return navigator.languages?.some((l) => l.toLowerCase().startsWith("ko")) ? "ko" : "en";
+  return (navigator.language ?? "").toLowerCase().startsWith("ko") ? "ko" : "en";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -107,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bodyParts: [],
   intervalMinutes: 60,
   position: "right-bottom",
-  durationSeconds: 60,
+  durationSeconds: 20,
   goal: 6,
   planDay: "",
 };

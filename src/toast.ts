@@ -247,7 +247,7 @@ async function init() {
   const ids = normalizeParts(settings?.bodyParts ?? []);
 
   intervalMinutes = settings?.intervalMinutes ?? 60;
-  lifetimeMs = (settings?.durationSeconds ?? 60) * 1000;
+  lifetimeMs = (settings?.durationSeconds ?? 20) * 1000;
   items = (ids.length ? ids : BODY_PART_IDS.slice(0, 2)).map(buildItem);
   $("list").replaceChildren(...items.map((i) => i.el));
 

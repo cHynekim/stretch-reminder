@@ -214,6 +214,10 @@ body.setup .card > h2, body.setup .card h2.mt {
   font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 6px;
 }
 body.setup .card-head { justify-content: center; flex-direction: column; align-items: center; gap: 4px; }
+/* Start screen: a short guide instead of Select all / Clear */
+.parts-guide { display: none; }
+body.setup .parts-guide { display: block; margin: 0 0 4px; line-height: 1.5; }
+body.setup .card-head .row-actions { display: none; }
 body.setup .stepper { margin: 0 0 4px; }
 body.setup .stepper output { font-size: 1.9rem; }
 body.setup .stepper .step { background: var(--surface); }
