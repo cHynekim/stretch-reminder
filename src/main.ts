@@ -1,5 +1,7 @@
 import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import { checkForUpdateSoon } from "./updates";
 import { applyStatic, formatDate, formatInterval, partName, setLanguage, t } from "./i18n";
 import {
   BODY_PART_IDS,
@@ -31,6 +33,7 @@ type Mode = "first" | "daily" | "normal";
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let saved: Settings | null = null;
 let mode: Mode = "first";
+let appVersion = "";
 
 function computeMode(): Mode {
   if (!saved) return "first";
@@ -101,6 +104,7 @@ function renderLanguage() {
     // First launch picks the language from the OS (Korean → ko, anything else → en); change it later here.
     "language-card": ["normal"],
     quit: ["normal"],
+    community: ["normal"],
     test: ["normal"],
   };
   for (const [id, modes] of Object.entries(visible)) $(id).hidden = !modes.includes(mode);
@@ -112,6 +116,7 @@ function renderLanguage() {
   $("subtitle").textContent = t(subtitle[mode]);
   $("save").textContent = t(action[mode]);
   document.title = t("title.main");
+  if (appVersion) $("app-version").textContent = t("version", { v: appVersion });
 
   renderParts();
   renderSummary();
@@ -189,6 +194,10 @@ function wireControls() {
     } catch (e) {
       setMessage(String(e), "error");
     }
+  });
+
+  $("community").addEventListener("click", () => {
+    invoke("open_community").catch((e) => setMessage(String(e), "error"));
   });
 
   $("test").addEventListener("click", () => {
@@ -269,9 +278,12 @@ async function init() {
   mode = computeMode();
   if (mode !== "normal") applyDailyDefaults();
 
+  appVersion = await getVersion().catch(() => "");
+
   wireControls();
   renderLanguage();
   setInterval(refreshStatus, 1000);
+  checkForUpdateSoon();
 }
 
 init();

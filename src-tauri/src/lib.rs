@@ -315,6 +315,27 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// The community site (downloads + review/report board).
+/// If this ever changes, also update `plugins.updater.endpoints` in tauri.conf.json.
+const COMMUNITY_URL: &str = "https://stretch-reminder-community.vercel.app";
+
+/// Open the community site in the default browser, with the app version and OS so the
+/// report form can pre-fill them. Only ever opens COMMUNITY_URL.
+fn open_community_site(app: &AppHandle) {
+    use tauri_plugin_opener::OpenerExt;
+    let url = format!(
+        "{COMMUNITY_URL}/?v={}&os={}",
+        app.package_info().version,
+        std::env::consts::OS
+    );
+    let _ = app.opener().open_url(url, None::<&str>);
+}
+
+#[tauri::command]
+fn open_community(app: AppHandle) {
+    open_community_site(&app);
+}
+
 /// The OS's primary language, for the first launch: "ko" if it's Korean, otherwise "en".
 /// Read natively because the webview's `navigator.language` follows the app bundle's
 /// localizations on macOS and can say "en-US" on a Korean system.
@@ -592,17 +613,25 @@ fn show_main(app: &AppHandle) {
 struct TrayMenu {
     stretch: MenuItem<Wry>,
     settings: MenuItem<Wry>,
+    community: MenuItem<Wry>,
     quit: MenuItem<Wry>,
 }
 
 fn apply_tray_language(app: &AppHandle, language: Language) {
-    let (stretch, settings, quit, tooltip) = match language {
-        Language::En => ("Stretch now", "Settings…", "Quit Stretch Reminder", "Stretch Reminder"),
-        Language::Ko => ("지금 스트레칭", "설정…", "스트레칭 알리미 종료", "스트레칭 알리미"),
+    let (stretch, settings, community, quit, tooltip) = match language {
+        Language::En => (
+            "Stretch now",
+            "Settings…",
+            "Community / Report a problem",
+            "Quit Stretch Reminder",
+            "Stretch Reminder",
+        ),
+        Language::Ko => ("지금 스트레칭", "설정…", "커뮤니티 · 문의하기", "스트레칭 알리미 종료", "스트레칭 알리미"),
     };
     if let Some(menu) = app.try_state::<TrayMenu>() {
         let _ = menu.stretch.set_text(stretch);
         let _ = menu.settings.set_text(settings);
+        let _ = menu.community.set_text(community);
         let _ = menu.quit.set_text(quit);
     }
     if let Some(tray) = app.tray_by_id("tray") {
@@ -613,10 +642,11 @@ fn apply_tray_language(app: &AppHandle, language: Language) {
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let stretch = MenuItem::with_id(app, "stretch", "Stretch now", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let community = MenuItem::with_id(app, "community", "Community / Report a problem", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Stretch Reminder", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&stretch, &settings, &separator, &quit])?;
-    app.manage(TrayMenu { stretch, settings, quit });
+    let menu = Menu::with_items(app, &[&stretch, &settings, &community, &separator, &quit])?;
+    app.manage(TrayMenu { stretch, settings, community, quit });
 
     let mut tray = TrayIconBuilder::with_id("tray")
         .tooltip("Stretch Reminder")
@@ -630,6 +660,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 });
             }
             "settings" => show_main(app),
+            "community" => open_community_site(app),
             "quit" => app.exit(0),
             _ => {}
         });
@@ -653,6 +684,9 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build()) // in-app updates (signed, from the community site)
+        .plugin(tauri_plugin_process::init()) // restart after an update
+        .plugin(tauri_plugin_opener::init()) // open the community site in the browser
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
@@ -660,6 +694,7 @@ pub fn run() {
             hide_main,
             open_main,
             quit_app,
+            open_community,
             system_language,
             seconds_until_next,
             stretch_now,
