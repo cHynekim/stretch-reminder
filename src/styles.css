@@ -276,6 +276,44 @@ body.setup .wrap > :nth-child(8) { animation-delay: 0.56s; }
   transition: transform 0.18s ease-out, opacity 0.18s ease-out;
 }
 .app-toast.show { transform: translate(-50%, 0); opacity: 1; }
+/* Update toast sits at the top so it never collides with the quit confirmation */
+.app-toast.top { top: 16px; bottom: auto; transform: translate(-50%, -16px); }
+.app-toast.top.show { transform: translate(-50%, 0); }
+/* Start screens (first run / daily plan): dead centre of the window */
+.app-toast.top.center { top: 50%; transform: translate(-50%, -50%) scale(0.96); }
+.app-toast.top.center.show { transform: translate(-50%, -50%) scale(1); }
+.toast-x {
+  position: absolute; top: 8px; right: 10px;
+  width: 24px; height: 24px; padding: 0; border: none; background: none;
+  font-size: 1.2rem; line-height: 1; color: var(--muted);
+}
+/* Room for the × goes on the title only, so the button row uses the full width:
+   the gap left of "skip" equals the gap right of "Update" (both = the toast padding). */
+/* Backdrop behind the centred update toast: white in light mode, black in dark mode */
+.update-backdrop {
+  position: fixed; inset: 0; z-index: 9;
+  background: rgba(255, 255, 255, 0.7);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity 0.2s ease-out;
+}
+.update-backdrop.show { opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  .update-backdrop { background: rgba(0, 0, 0, 0.6); }
+}
+
+/* Smaller buttons inside in-app toasts so the message stands out */
+.app-toast .btn { padding: 6px 12px; font-size: 0.85rem; border-radius: 8px; }
+
+.update-title { font-weight: 700; padding-right: 28px; }
+.app-toast.center .update-title { padding-left: 28px; } /* centred text stays truly centred despite the × */
+.app-toast .app-toast-actions { align-items: center; }
+.app-toast .app-toast-actions .link { margin-right: auto; padding-left: 0; }
+.error-text { color: var(--danger); margin: 0 0 8px; }
+
+/* Footer: quit + community on the left, version under everything */
+.footer-left { display: flex; align-items: center; gap: 4px; }
+.app-version { text-align: center; margin: 18px 0 0; }
 .app-toast p { margin: 0; }
 .app-toast-actions { display: flex; justify-content: flex-end; gap: 8px; }
 

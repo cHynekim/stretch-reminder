@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>스트레칭 알리미</title>
+    <meta name="description" content="스트레칭 알리미 최신 버전 다운로드와 리뷰·문의 게시판" />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <!-- 1. 최신 버전 다운로드 -->
+      <section class="hero" id="download">
+        <img class="logo" src="/icon.png" alt="" width="72" height="72" />
+        <h1>스트레칭 알리미</h1>
+        <p class="muted">오래 앉아 있는 사람을 위한, 진짜로 스트레칭하게 만드는 알리미</p>
+
+        <div id="release" class="release" hidden>
+          <a id="primary-dl" class="btn primary big" href="#"></a>
+          <p class="muted small" id="release-meta"></p>
+          <p class="small"><a id="other-dl" href="#"></a></p>
+          <p class="notes" id="release-notes"></p>
+        </div>
+        <p id="release-empty" class="muted" hidden>아직 배포된 버전이 없어요. 곧 올라올 예정이에요!</p>
+
+        <details class="guide">
+          <summary>처음 설치할 때 경고가 떠요</summary>
+          <div class="guide-body">
+            <h3>Mac</h3>
+            <ol>
+              <li>.dmg를 열고 앱을 <b>응용 프로그램</b> 폴더로 끌어다 놓아요.</li>
+              <li>앱을 처음 열면 "확인되지 않은 개발자" 경고가 떠요. <b>완료</b>를 눌러 닫아요.</li>
+              <li><b>시스템 설정 → 개인정보 보호 및 보안</b> 맨 아래의 <b>그래도 열기</b>를 누르고 다시 열어요.</li>
+            </ol>
+            <h3>Windows</h3>
+            <ol>
+              <li>설치 파일을 실행하면 "Windows의 PC 보호" 창이 떠요.</li>
+              <li><b>추가 정보 → 실행</b>을 눌러 설치해요.</li>
+            </ol>
+            <p class="muted small">한 번 설치하고 나면 다음 버전부터는 앱 안에서 자동으로 업데이트돼요.</p>
+          </div>
+        </details>
+      </section>
+
+      <!-- 2. 리뷰 · 제보 게시판 -->
+      <section class="board" id="board">
+        <div class="board-head">
+          <h2>리뷰 · 제보 게시판</h2>
+          <button type="button" id="write-toggle" class="btn primary">글쓰기</button>
+        </div>
+
+        <form id="write" class="card write" hidden>
+          <div class="kinds" role="radiogroup" aria-label="글 종류">
+            <label><input type="radio" name="kind" value="bug" checked /> 🐞 버그 제보</label>
+            <label><input type="radio" name="kind" value="request" /> 💡 기능 요청</label>
+            <label><input type="radio" name="kind" value="review" /> ⭐ 리뷰</label>
+          </div>
+          <div class="row2">
+            <input name="nickname" maxlength="20" placeholder="닉네임" autocomplete="nickname" required />
+            <input name="password" type="password" maxlength="64" placeholder="비밀번호 (삭제할 때 필요)" autocomplete="new-password" required />
+          </div>
+          <input name="title" maxlength="80" placeholder="제목" required />
+          <textarea name="body" maxlength="2000" rows="5" placeholder="내용을 적어주세요. 버그라면 어떤 상황에서 생겼는지 알려주시면 큰 도움이 돼요." required></textarea>
+          <!-- honeypot: hidden from people, bots fill it -->
+          <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <div class="write-foot">
+            <span class="muted small" id="env-note"></span>
+            <button type="submit" class="btn primary">등록</button>
+          </div>
+          <p class="form-msg" id="form-msg" role="status"></p>
+        </form>
+
+        <div class="tabs" role="tablist">
+          <button type="button" data-kind="" class="active">전체</button>
+          <button type="button" data-kind="bug">🐞 버그</button>
+          <button type="button" data-kind="request">💡 요청</button>
+          <button type="button" data-kind="review">⭐ 리뷰</button>
+        </div>
+
+        <ul id="posts" class="posts"></ul>
+        <p id="posts-empty" class="muted center" hidden>아직 글이 없어요. 첫 글을 남겨주세요!</p>
+        <button type="button" id="more" class="btn secondary wide" hidden>더 보기</button>
+      </section>
+
+      <footer class="foot muted small">
+        닉네임과 비밀번호만으로 글을 쓸 수 있어요. 비밀번호는 암호화해서 저장하고, 도배 방지를 위해 접속 IP는 복원할 수 없는 형태로만 기록해요.
+      </footer>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

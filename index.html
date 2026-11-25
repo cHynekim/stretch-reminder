@@ -92,14 +92,40 @@
       </section>
 
       <footer class="actions">
-        <button type="button" id="quit" class="btn ghost-danger" data-i18n="quit" hidden></button>
+        <div class="footer-left">
+          <button type="button" id="quit" class="btn ghost-danger" data-i18n="quit" hidden></button>
+          <button type="button" id="community" class="link" data-i18n="community" hidden></button>
+        </div>
         <div class="buttons">
           <button type="button" id="test" class="btn secondary" data-i18n="test" hidden></button>
           <button type="button" id="save" class="btn primary"></button>
         </div>
       </footer>
       <p id="message" class="message" role="status"></p>
+      <p id="app-version" class="app-version muted small"></p>
     </main>
+
+    <!-- Backdrop behind the update toast on the start screens -->
+    <div id="update-backdrop" class="update-backdrop" hidden></div>
+
+    <!-- In-app toast: a new version is available (top of the window, or centred on start screens) -->
+    <div id="update-toast" class="app-toast top" role="status" aria-live="polite" hidden>
+      <button type="button" id="update-close" class="toast-x" data-i18n-aria="update.close">×</button>
+      <p id="update-title" class="update-title"></p>
+      <p id="update-body" class="muted small"></p>
+      <div id="update-actions" class="app-toast-actions">
+        <button type="button" id="update-skip" class="link" data-i18n="update.skip"></button>
+        <button type="button" id="update-later" class="btn secondary" data-i18n="update.later"></button>
+        <button type="button" id="update-now" class="btn primary" data-i18n="update.now"></button>
+      </div>
+      <p id="update-status" class="small" hidden></p>
+      <div id="update-error" hidden>
+        <p class="small error-text" data-i18n="update.failed"></p>
+        <div class="app-toast-actions">
+          <button type="button" id="update-site" class="btn primary" data-i18n="update.openSite"></button>
+        </div>
+      </div>
+    </div>
 
     <!-- In-app confirmation toast for quitting -->
     <div id="quit-toast" class="app-toast" role="alertdialog" aria-labelledby="quit-toast-text" hidden>
