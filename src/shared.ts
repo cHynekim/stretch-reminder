@@ -28,8 +28,12 @@ export const GOAL = { min: 1, max: 20, step: 1 };
 /** End of the workday (6 PM, local time), used to suggest how many stretches still fit today. */
 export const WORKDAY_END_HOUR = 18;
 
-/** Minutes from now until 6 PM today (0 once it has passed). */
+/** Default goal when the day's plan is made after 6 PM (or before 5 AM). */
+export const LATE_DEFAULT_GOAL = 3;
+
+/** Minutes from now until 6 PM today (0 after 6 PM, and before 5 AM, which still counts as last night). */
 export function minutesUntilWorkdayEnd(now = new Date()): number {
+  if (now.getHours() < DAY_START_HOUR) return 0;
   const end = new Date(now);
   end.setHours(WORKDAY_END_HOUR, 0, 0, 0);
   return Math.max(0, Math.floor((end.getTime() - now.getTime()) / 60000));
@@ -47,8 +51,20 @@ export function formatHMS(totalSeconds: number): string {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
 
-/** Today's local date as YYYY-MM-DD; the key the backend uses for daily stats. */
-export function localDay(d = new Date()): string {
+/**
+ * The app's day starts at 5 AM, not midnight, so working past midnight still counts as the
+ * same day; the next day's plan is asked for after 5 AM. Must match DAY_START_HOUR in lib.rs.
+ */
+export const DAY_START_HOUR = 5;
+
+/** The date the app's day belongs to (before 5 AM → still yesterday). */
+export function appDate(now = new Date()): Date {
+  return new Date(now.getTime() - DAY_START_HOUR * 60 * 60 * 1000);
+}
+
+/** The app's day as YYYY-MM-DD; the key the backend uses for the daily plan and stats. */
+export function localDay(now = new Date()): string {
+  const d = appDate(now);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

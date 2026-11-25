@@ -100,9 +100,15 @@ impl Settings {
     }
 }
 
-/// Today's local date, "YYYY-MM-DD".
+/// The app's day starts at 5 AM, not midnight: working past midnight still counts as the same
+/// day, and the next day's plan is asked for after 5 AM. Must match DAY_START_HOUR in shared.ts.
+const DAY_START_HOUR: i64 = 5;
+
+/// The app's current day, "YYYY-MM-DD" (before 5 AM it is still yesterday).
 fn today() -> String {
-    chrono::Local::now().format("%Y-%m-%d").to_string()
+    (chrono::Local::now() - chrono::Duration::hours(DAY_START_HOUR))
+        .format("%Y-%m-%d")
+        .to_string()
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {

@@ -313,8 +313,11 @@ body.setup .wrap > :nth-child(8) { animation-delay: 0.56s; }
 
 /* Footer: quit + community on the left, version under everything */
 .footer-left { display: flex; align-items: center; gap: 4px; }
+.reset-note { margin: 14px 0 0; }
 .actions button { white-space: nowrap; } /* labels never wrap onto two lines */
-.app-version { text-align: center; margin: 18px 0 0; }
+/* Quieter than other muted text. Fades the colour, not `opacity`: the start-screen `rise`
+   animation holds opacity at 1, which would override it. Lower % = fainter. */
+.app-version { text-align: center; margin: 18px 0 0; color: color-mix(in srgb, var(--muted) 30%, transparent); }
 .app-toast p { margin: 0; }
 .app-toast-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
