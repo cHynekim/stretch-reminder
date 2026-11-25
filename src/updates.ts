@@ -9,7 +9,7 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { invoke } from "@tauri-apps/api/core";
-import { t } from "./i18n";
+import { getLanguage, t } from "./i18n";
 
 const SKIP_KEY = "skippedUpdateVersion"; // per-device convenience; safe to lose
 const CHECK_DELAY_MS = 1500; // let the window settle first
@@ -30,6 +30,20 @@ function skipVersion(version: string) {
   } catch {
     /* storage unavailable: the toast just comes back next launch */
   }
+}
+
+/**
+ * Release notes come from RELEASE_NOTES.md, split into language sections:
+ *   <!-- ko --> 한국어 …   <!-- en --> English …
+ * Korean app → Korean section; any other language → English section.
+ * Notes without markers are treated as Korean (older releases).
+ */
+function localizedNotes(body: string | undefined): string {
+  const text = (body ?? "").trim();
+  const lang = getLanguage() === "ko" ? "ko" : "en";
+  const sections = [...text.matchAll(/<!--\s*(ko|en)\s*-->([\s\S]*?)(?=<!--\s*(?:ko|en)\s*-->|$)/g)];
+  if (!sections.length) return lang === "ko" ? text : "";
+  return sections.find((m) => m[1] === lang)?.[2].trim() ?? "";
 }
 
 function show(el: HTMLElement) {
@@ -77,7 +91,7 @@ async function install(update: Update) {
 function present(update: Update) {
   const toast = $("update-toast");
   $("update-title").textContent = t("update.title", { v: update.version });
-  $("update-body").textContent = update.body?.trim() || t("update.body");
+  $("update-body").textContent = localizedNotes(update.body) || t("update.body");
 
   // Start screens (first run / daily plan): centred over a backdrop. Normal settings view: at the top.
   const centred = document.body.classList.contains("setup");

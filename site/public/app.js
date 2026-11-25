@@ -21,6 +21,13 @@ function detectOs() {
   return /Windows/i.test(navigator.userAgent) ? "windows" : "mac";
 }
 
+/** RELEASE_NOTES.md has <!-- ko --> / <!-- en --> sections; the site is Korean-only. */
+function koreanNotes(body) {
+  const text = (body || "").trim();
+  const ko = text.match(/<!--\s*ko\s*-->([\s\S]*?)(?=<!--\s*(?:ko|en)\s*-->|$)/);
+  return (ko ? ko[1] : text.replace(/<!--[\s\S]*?-->/g, "")).trim();
+}
+
 function sizeText(bytes) {
   return bytes ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : "";
 }
@@ -68,7 +75,7 @@ async function loadRelease() {
   );
   holder.hidden = others.length === 0;
 
-  $("release-notes").textContent = (release.body || "").trim();
+  $("release-notes").textContent = koreanNotes(release.body);
   $("release").hidden = false;
 }
 
