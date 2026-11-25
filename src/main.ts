@@ -2,11 +2,12 @@ import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { checkForUpdateSoon } from "./updates";
-import { applyStatic, formatDate, formatInterval, partName, setLanguage, t } from "./i18n";
+import { applyStatic, formatDate, formatInterval, lateCheer, partName, setLanguage, t } from "./i18n";
 import {
   BODY_PART_IDS,
   DEFAULT_SETTINGS,
   GOAL,
+  LATE_DEFAULT_GOAL,
   INTERVAL,
   Language,
   Settings,
@@ -14,6 +15,7 @@ import {
   ToastPosition,
   formatClock,
   formatHMS,
+  appDate,
   localDay,
   maxStretchesToday,
   normalizeParts,
@@ -84,10 +86,10 @@ function renderSummary() {
     settings.bodyParts.length === 0 || (mode === "normal" && !dirty);
 }
 
-/** "From now until 6 PM, this interval fits up to N." Recomputed as the clock moves. */
+/** "From now until 6 PM, this interval fits up to N." After 6 PM: a random late-night cheer. */
 function renderGoalHint() {
   const n = maxStretchesToday(settings.intervalMinutes);
-  $("goal-hint").textContent = n > 0 ? t("goal.hint", { n }) : t("goal.hintLate");
+  $("goal-hint").textContent = n > 0 ? t("goal.hint", { n }) : lateCheer();
 }
 
 /** Re-render every piece of text in the current language and mode. */
@@ -106,6 +108,7 @@ function renderLanguage() {
     quit: ["normal"],
     community: ["normal"],
     test: ["normal"],
+    "reset-note": ["first", "daily"],
   };
   for (const [id, modes] of Object.entries(visible)) $(id).hidden = !modes.includes(mode);
 
@@ -232,15 +235,18 @@ function renderSummaryLine(stats: Stats, goal: number) {
   $("legend-goal").textContent = t("legend.goal", { n: goal });
 }
 
-/** Each new day starts from a 1-hour interval; the goal keeps yesterday's value if it still fits before 6 PM. */
+/**
+ * Each new day starts from a 1-hour interval. The goal keeps yesterday's value if it still fits
+ * before 6 PM (otherwise it is lowered to what fits); after 6 PM it starts at a light 3.
+ */
 function applyDailyDefaults() {
   settings.intervalMinutes = 60;
   const fits = maxStretchesToday(settings.intervalMinutes);
-  if (fits > 0) settings.goal = clamp(settings.goal, { min: GOAL.min, max: fits });
+  settings.goal = fits > 0 ? clamp(settings.goal, { min: GOAL.min, max: fits }) : LATE_DEFAULT_GOAL;
 }
 
 async function refreshStatus() {
-  renderGoalHint();
+  renderGoalHint(); // the clock moves, so the hint can change
   // A new day may have started while the window was open.
   if (saved && mode === "normal" && computeMode() === "daily") {
     mode = "daily";
@@ -249,7 +255,7 @@ async function refreshStatus() {
     return;
   }
   if (mode !== "normal") return;
-  $("today").textContent = formatDate(new Date());
+  $("today").textContent = formatDate(appDate()); // before 5 AM this is still yesterday
   try {
     const [secs, stats] = await Promise.all([
       invoke<number | null>("seconds_until_next"),

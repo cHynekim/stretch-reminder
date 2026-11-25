@@ -20,7 +20,7 @@ const en = {
   goal: "Today's goal",
   "goal.value": "{n} times",
   "goal.hint": "From now until 6 PM, this interval fits up to {n}.",
-  "goal.hintLate": "It's past 6 PM. Set a light goal for the rest of today.",
+  resetNote: "Your goal and progress reset every day at 5 AM.",
   "goal.dec": "One fewer",
   "goal.inc": "One more",
   bodyParts: "Body parts",
@@ -46,7 +46,7 @@ const en = {
   "quit.cancel": "Cancel",
   "quit.yes": "Quit",
   community: "Community · Report",
-  version: "Version {v}",
+  version: "v{v}",
   "update.title": "Version {v} is available",
   "update.body": "Update to get the latest fixes and features.",
   "update.now": "Update",
@@ -99,7 +99,7 @@ const ko: Record<Key, string> = {
   goal: "오늘 목표 횟수",
   "goal.value": "{n}회",
   "goal.hint": "지금부터 6시까지, 이 간격이면 최대 {n}회까지 가능해요.",
-  "goal.hintLate": "6시가 지났어요. 남은 시간엔 가볍게 목표를 잡아봐요.",
+  resetNote: "목표와 기록은 매일 오전 5시에 초기화돼요.",
   "goal.dec": "1회 줄이기",
   "goal.inc": "1회 늘리기",
   bodyParts: "스트레칭 부위",
@@ -123,7 +123,7 @@ const ko: Record<Key, string> = {
   "quit.cancel": "취소",
   "quit.yes": "종료",
   community: "커뮤니티 · 문의하기",
-  version: "버전 {v}",
+  version: "v{v}",
   "update.title": "새 버전({v})이 나왔어요",
   "update.body": "업데이트하면 최신 개선 사항을 바로 쓸 수 있어요.",
   "update.now": "업데이트",
@@ -326,6 +326,32 @@ const FINAL_CHEERS: Record<Language, { title: string; body: string }[]> = {
     { title: "오늘 할 일 끝!", body: "미래의 내가 벌써 고마워해요. 내일도 꾸준히 해봐요!" },
   ],
 };
+
+/** Shown under today's goal when the plan is made after 6 PM (or before 5 AM). One is picked at random. */
+const LATE_CHEERS: Record<Language, string[]> = {
+  en: [
+    "Working late, huh? Don't forget to stretch, though.",
+    "Still going strong this late! Give your body a break too.",
+    "Long day? A few stretches will help you wind down.",
+    "Burning the midnight oil? Your shoulders could use some love.",
+    "Late hours, tight muscles. Let's loosen up a little.",
+  ],
+  ko: [
+    "늦게까지 열심이네요. 그래도 잊지 말고 스트레칭 해주세요.",
+    "이 시간까지 고생 많아요! 몸도 잠깐 쉬게 해줘요.",
+    "긴 하루였죠? 스트레칭으로 가볍게 마무리해봐요.",
+    "늦은 시간일수록 몸이 굳기 쉬워요. 조금씩 풀어줘요.",
+    "오늘도 끝까지 달리는 중이네요. 어깨 한 번 쭉 펴고 가요!",
+  ],
+};
+
+// Picked once per launch, so the message doesn't change every second as the screen refreshes.
+const lateCheerPick = Math.random();
+
+export function lateCheer(): string {
+  const list = LATE_CHEERS[current];
+  return list[Math.floor(lateCheerPick * list.length)];
+}
 
 export function randomFinalCheer(): { title: string; body: string } {
   const list = FINAL_CHEERS[current];
