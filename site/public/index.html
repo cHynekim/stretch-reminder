@@ -9,21 +9,35 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="40" height="40" />
+        <h1>스트레칭 알리미</h1>
+      </a>
+      <!-- TEMP (dev): light/dark toggle. Remove before sharing widely. -->
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="라이트/다크 모드 전환" title="라이트/다크 모드 전환 (개발용)">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 0 18zm0-2a11 11 0 1 1 0 22 11 11 0 0 1 0-22z"/></svg>
+      </button>
+    </header>
+
     <main class="wrap">
       <!-- 1. 최신 버전 다운로드 -->
       <section class="hero" id="download">
-        <img class="logo" src="/icon.png" alt="" width="72" height="72" />
-        <h1>스트레칭 알리미</h1>
-        <p class="muted">오래 앉아 있는 사람을 위한, 진짜로 스트레칭하게 만드는 알리미</p>
-
         <div id="release" class="release" hidden>
-          <a id="primary-dl" class="btn primary big" href="#"></a>
+          <div class="dl-buttons">
+            <a id="dl-mac" class="btn primary big" href="#" hidden>
+              <span>Mac용 다운로드</span><span class="size"></span>
+            </a>
+            <a id="dl-win" class="btn primary big" href="#" hidden>
+              <span>Windows용 다운로드</span><span class="size"></span>
+            </a>
+          </div>
           <p class="muted small" id="release-meta"></p>
-          <p class="small"><a id="other-dl" href="#"></a></p>
-          <p class="notes" id="release-notes"></p>
+          <p class="small" id="intel-line" hidden><a id="dl-intel" href="#"></a></p>
         </div>
         <p id="release-empty" class="muted" hidden>아직 배포된 버전이 없어요. 곧 올라올 예정이에요!</p>
 
+        <h2 class="faq-title">FAQ</h2>
         <details class="guide">
           <summary>처음 설치할 때 경고가 떠요</summary>
           <div class="guide-body">
@@ -51,24 +65,26 @@
         </div>
 
         <form id="write" class="card write" hidden>
+          <button type="button" id="write-close" class="icon-btn corner" aria-label="닫기" title="닫기">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
           <div class="kinds" role="radiogroup" aria-label="글 종류">
-            <label><input type="radio" name="kind" value="bug" checked /> 🐞 버그 제보</label>
-            <label><input type="radio" name="kind" value="request" /> 💡 기능 요청</label>
-            <label><input type="radio" name="kind" value="review" /> ⭐ 리뷰</label>
+            <label><input type="radio" name="kind" value="bug" checked /><span>🐞 버그 제보</span></label>
+            <label><input type="radio" name="kind" value="request" /><span>💡 기능 요청</span></label>
+            <label><input type="radio" name="kind" value="review" /><span>⭐ 리뷰</span></label>
           </div>
           <div class="row2">
             <input name="nickname" maxlength="20" placeholder="닉네임" autocomplete="nickname" required />
-            <input name="password" type="password" maxlength="64" placeholder="비밀번호 (삭제할 때 필요)" autocomplete="new-password" required />
+            <input name="password" type="password" minlength="4" maxlength="12" placeholder="비밀번호 4~12자 (수정·삭제할 때 필요)" autocomplete="new-password" required />
           </div>
           <input name="title" maxlength="80" placeholder="제목" required />
-          <textarea name="body" maxlength="2000" rows="5" placeholder="내용을 적어주세요. 버그라면 어떤 상황에서 생겼는지 알려주시면 큰 도움이 돼요." required></textarea>
+          <textarea name="body" maxlength="2000" rows="5" required></textarea>
           <!-- honeypot: hidden from people, bots fill it -->
           <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
           <div class="write-foot">
-            <span class="muted small" id="env-note"></span>
+            <p class="form-msg" id="form-msg" role="alert"></p>
             <button type="submit" class="btn primary">등록</button>
           </div>
-          <p class="form-msg" id="form-msg" role="status"></p>
         </form>
 
         <div class="tabs" role="tablist">
@@ -87,6 +103,8 @@
         닉네임과 비밀번호만으로 글을 쓸 수 있어요. 비밀번호는 암호화해서 저장하고, 도배 방지를 위해 접속 IP는 복원할 수 없는 형태로만 기록해요.
       </footer>
     </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
