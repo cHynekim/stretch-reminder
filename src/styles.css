@@ -313,6 +313,7 @@ body.setup .wrap > :nth-child(8) { animation-delay: 0.56s; }
 
 /* Footer: quit + community on the left, version under everything */
 .footer-left { display: flex; align-items: center; gap: 4px; }
+.actions button { white-space: nowrap; } /* labels never wrap onto two lines */
 .app-version { text-align: center; margin: 18px 0 0; }
 .app-toast p { margin: 0; }
 .app-toast-actions { display: flex; justify-content: flex-end; gap: 8px; }

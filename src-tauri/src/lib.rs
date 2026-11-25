@@ -259,6 +259,15 @@ fn record_stat(app: &AppHandle, update: impl FnOnce(&mut Stats)) -> Stats {
 const MISSED_RETRY: Duration = Duration::from_secs(5 * 60);
 
 impl AppState {
+    /// Start the countdown only if none is running (first run, or today's plan was just
+    /// confirmed). A running countdown is left alone, so a changed interval takes effect from
+    /// the next stretch instead of resetting the current wait.
+    fn start_timer_if_idle(&self) {
+        if self.next_due.lock().unwrap().is_none() {
+            self.restart_timer();
+        }
+    }
+
     /// Start a full interval, but only if today's plan has been confirmed.
     fn restart_timer(&self) {
         let settings = self.settings.lock().unwrap();
@@ -279,7 +288,9 @@ fn get_settings(state: State<'_, AppState>) -> Option<Settings> {
 }
 
 #[tauri::command]
-/// Saving always confirms today's plan (interval + goal), which (re)starts reminders.
+/// Saving always confirms today's plan (interval + goal). It starts reminders if they aren't
+/// running yet; a countdown already in progress keeps going, and the new settings apply from
+/// the next stretch.
 fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
     let settings = Settings { plan_day: today(), ..settings }.sanitized();
     if settings.body_parts.is_empty() {
@@ -288,7 +299,7 @@ fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings)
     write_settings(&app, &settings)?;
     apply_tray_language(&app, settings.language);
     *state.settings.lock().unwrap() = Some(settings);
-    state.restart_timer();
+    state.start_timer_if_idle();
     Ok(())
 }
 
