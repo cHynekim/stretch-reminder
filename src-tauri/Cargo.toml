@@ -1,6 +1,6 @@
 [package]
 name = "stretch-reminder"
-version = "0.2.0"
+version = "0.2.1"
 description = "Reminds you to stretch, and makes sure you actually do it"
 edition = "2021"
 
